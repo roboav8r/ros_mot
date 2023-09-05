@@ -1,0 +1,7 @@
+[submodule "src/AB3DMOT"]
+	path = src/AB3DMOT
+	url = https://github.com/xinshuoweng/AB3DMOT
+[submodule "src/mmdetection3d"]
+	path = src/mmdetection3d
+	url = https://github.com/open-mmlab/mmdetection3d.git
+	branch = dev-1.x

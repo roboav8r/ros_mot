@@ -12,7 +12,7 @@ To run without CUDA, use the alternate dependency file as specified below.
 ## Clone the repository
 ```
 cd ~/my_ws/src
-git clone https://github.com/roboav8r/ros_mot
+git clone --recursive https://github.com/roboav8r/ros_mot
 ```
 
 ## Install dependencies
