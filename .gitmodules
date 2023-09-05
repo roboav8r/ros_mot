@@ -1,7 +1,10 @@
 [submodule "src/AB3DMOT"]
 	path = src/AB3DMOT
 	url = https://github.com/xinshuoweng/AB3DMOT
-[submodule "src/mmdetection3d"]
-	path = src/mmdetection3d
-	url = https://github.com/open-mmlab/mmdetection3d.git
-	branch = dev-1.x
+# [submodule "src/mmdetection3d"]
+# 	path = src/mmdetection3d
+# 	url = https://github.com/open-mmlab/mmdetection3d.git
+# 	branch = v1.0.0rc0
+[submodule "src/Xinshuo_PyToolbox"]
+	path = src/Xinshuo_PyToolbox
+	url = https://github.com/xinshuoweng/Xinshuo_PyToolbox

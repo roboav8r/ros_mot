@@ -1,7 +1,7 @@
 import numpy as np
 
 from copy import deepcopy
-from kitti_oxts import roty
+from ab3dmot_ros.kitti_oxts import roty
 
 class Box3D:
     def __init__(self, x=None, y=None, z=None, h=None, w=None, l=None, ry=None, s=None):
