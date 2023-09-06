@@ -7,23 +7,24 @@
 # email: taghavi.pardis@gmail.com
 
 from __future__ import print_function
-import numpy as np, copy, math,sys,argparse
+import numpy as np, copy, math, sys, argparse
 
 import os
 import sys
 import rospy
 import torch
 import time
+import rospkg
 
 # Get the directory path of the current file
-current_dir = os.path.dirname(os.path.abspath(__file__))
+# current_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Construct the desired path relative to the current file's location
-libs_dir = os.path.join(current_dir, "AB3DMOT/AB3DMOT_libs")
-xinshuo_lib=os.path.join(current_dir,"AB3DMOT/Xinshuo_PyToolbox")
+# libs_dir = os.path.join(current_dir, "AB3DMOT/AB3DMOT_libs")
+# xinshuo_lib=os.path.join(current_dir,"AB3DMOT/Xinshuo_PyToolbox")
 # Add the path to sys.path
-sys.path.append(libs_dir)
-sys.path.append(xinshuo_lib)
+# sys.path.append(libs_dir)
+# sys.path.append(xinshuo_lib)
 
 
 
@@ -40,7 +41,8 @@ from ab3dmot_ros.box import Box3D
 
 #import std_msgs.msg
 from mmdet3d.apis import init_model, inference_detector
-from mmdet3d.core.points import get_points_type
+# from mmdet3d.core.points import get_points_type
+from mmdet3d.structures.points import BasePoints
 #from geometry_msgs.msg import Quaternion
 from scipy.spatial.transform import Rotation as R
 import ros_numpy
@@ -56,7 +58,7 @@ lim_x=[0, 50]
 lim_y=[-20,20]
 lim_z=[-3,3]
 np.set_printoptions(suppress=True, precision=3)
-points_class = get_points_type('LIDAR')
+# points_class = get_points_type('LIDAR')
 
 calib_path= os.path.join(current_dir, "data/0000.txt")
 config_path=os.path.join(current_dir, "mmdetection3d/configs/pointpillars/hv_pointpillars_secfpn_6x8_160e_kitti-3d-3class.py")
@@ -170,7 +172,7 @@ class AB3DMOT():
 		points = np.column_stack((pc['x'], pc['y'],pc['z'], pc['i']))
 
 		pc_arr=self.crop_pointcloud((points)) #reduce computational expense
-		pointcloud_np = points_class(pc_arr, points_dim=pc_arr.shape[-1], attribute_dims=None)
+		pointcloud_np = BasePoints(pc_arr, points_dim=pc_arr.shape[-1], attribute_dims=None)
 		result, _  = inference_detector(self.model, pointcloud_np)
 
 		#detections
@@ -529,12 +531,17 @@ def yaw_to_quaternion(yaw):
 
 
 if __name__ == '__main__':
-	rospy.init_node("trackingNode")
-	print("tracking node initialzied")
-	config_file = config_path
-	checkpoint_file =model_path
+	rospy.init_node("multiobject_tracking_node")
+	print("Tracking node initialized")
+	
+	# Get 
+	rospack = rospkg.RosPack()
+	pkg_dir = rospack.get_path('ros_mot')
+	config_file = os.path.join(pkg_dir,'config','pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class.py')
+	checkpoint_file =os.path.join(pkg_dir,'config','hv_pointpillars_secfpn_6x8_160e_kitti-3d-3class_20220301_150306-37dc2420.pth')
 	device= torch.device('cuda:0')
 	topic="/kitti/velo/pointcloud"
+
 	model = init_model(config_file, checkpoint_file, device)
 	ID_start=1
-	AB3DMOT( ID_init=ID_start,model=model, pointcloud_topic=topic)
+	AB3DMOT(ID_init=ID_start,model=model, pointcloud_topic=topic)
