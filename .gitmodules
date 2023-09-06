@@ -8,3 +8,6 @@
 [submodule "src/Xinshuo_PyToolbox"]
 	path = src/Xinshuo_PyToolbox
 	url = https://github.com/xinshuoweng/Xinshuo_PyToolbox
+[submodule "src/SimpleTrack"]
+	path = src/SimpleTrack
+	url = https://github.com/tusen-ai/SimpleTrack.git

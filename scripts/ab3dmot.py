@@ -61,8 +61,8 @@ np.set_printoptions(suppress=True, precision=3)
 # points_class = get_points_type('LIDAR')
 
 calib_path= os.path.join(current_dir, "data/0000.txt")
-config_path=os.path.join(current_dir, "mmdetection3d/configs/pointpillars/hv_pointpillars_secfpn_6x8_160e_kitti-3d-3class.py")
-model_path=os.path.join(current_dir, "mmdetection3d/checkpoints/hv_pointpillars_secfpn_6x8_160e_kitti-3d-3class_20220301_150306-37dc2420.pth")
+# config_path=os.path.join(current_dir, "mmdetection3d/configs/pointpillars/hv_pointpillars_secfpn_6x8_160e_kitti-3d-3class.py")
+# model_path=os.path.join(current_dir, "mmdetection3d/checkpoints/hv_pointpillars_secfpn_6x8_160e_kitti-3d-3class_20220301_150306-37dc2420.pth")
 
 # A Baseline of 3D Multi-Object Tracking
 class AB3DMOT():			  	
