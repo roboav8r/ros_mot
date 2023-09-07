@@ -1,0 +1,16 @@
+
+<launch>
+
+    <!-- Load configuration -->
+    <arg name='config_file' default='config/example.yaml'/>
+    <rosparam command="load" file="$(find ros_mot)/$(arg config_file)" />
+
+    <!-- Play example KITTI rosbag -->
+    <node pkg="rosbag" type="play" name="player" output="screen" required="true" 
+    args="--loop --clock --pause --rate=0.5 -s 0 $(find ros_mot)/data/kitti_2011_09_26_drive_0001_synced.bag"/>
+    <param name="use_sim_time" value="true" />
+
+    <!-- Node -->
+    <node name="detector_node" pkg="ros_mot" type="detector.py" output="screen" respawn="true" />
+
+</launch>
