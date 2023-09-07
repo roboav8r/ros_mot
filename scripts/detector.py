@@ -17,8 +17,10 @@ import time
 import rospkg
 
 from sensor_msgs.msg import PointCloud2
+from sensor_msgs import point_cloud2
 
 from mmdet3d.apis import init_model, inference_detector
+from mmdet3d.structures.points import BasePoints
 
 # Constants / parameters
 callback_map = {'PointCloud2': 'self.pc2_callback'}
@@ -36,8 +38,10 @@ class mmdetector3d():
 		self.sub = rospy.Subscriber(self.topic, eval(self.msg_type), eval(callback_map[self.msg_type]))
 
 	def pc2_callback(self, pc2_msg):
-		print('pc2_callback got msg')
-
+		# Format ros pc2 message -> mmdet3d BasePoints
+		pc_list = point_cloud2.read_points_list(pc2_msg)
+		pc_np = np.array(list(pc_list))
+		result, _  = inference_detector(self.model, pc_np)
 
 if __name__ == '__main__':
 
@@ -58,7 +62,6 @@ if __name__ == '__main__':
 	for name,value in detector_dict.items():
 
 		if value['type']=='mmdet3d':
-
 			# Create mmdet3d model
 			cfg_file = os.path.join(pkg_path,value['config'])
 			ckpt_file = os.path.join(pkg_path,value['checkpoint'])
