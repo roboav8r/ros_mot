@@ -1,0 +1,13 @@
+sensors:
+  kitti_velo:
+    type: 3d_lidar
+    msg_type: 'sensor_msgs/PointCloud2'
+    topic: '/kitti/velo/pointcloud'
+
+detectors:
+  kitti_pointpillars:
+    type: 'mmdet3d'
+    topic: '/kitti/velo/pointcloud'  
+    msg_type: 'PointCloud2'
+    config: 'models/pointpillars_hv_secfpn_8xb6-160e_kitti-3d-3class.py'
+    checkpoint: 'models/hv_pointpillars_secfpn_6x8_160e_kitti-3d-3class_20220301_150306-37dc2420.pth'

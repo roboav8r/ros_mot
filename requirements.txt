@@ -1,8 +1,8 @@
+openmim
 mmengine
-mmcv-full==1.7.0
+mmcv==2.0.0rc4
 mmdet==3.0.0
 mmdet3d==1.1.1
 mmsegmentation==1.1.1
-openmim
 -r src/SimpleTrack/requirements.txt
 -e src/SimpleTrack
