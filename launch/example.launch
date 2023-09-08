@@ -1,8 +1,11 @@
 
 <launch>
 
-    <!-- Load configuration -->
+    <!-- Arguments -->
+    <arg name='visualization' default ='false' />
     <arg name='config_file' default='config/example.yaml'/>
+
+    <!-- Load configuration -->
     <rosparam command="load" file="$(find ros_mot)/$(arg config_file)" />
 
     <!-- Play example KITTI rosbag -->
@@ -10,7 +13,13 @@
     args="--loop --clock --pause --rate=0.25 -s 0 $(find ros_mot)/data/kitti_2011_09_26_drive_0001_synced.bag"/>
     <param name="use_sim_time" value="true" />
 
-    <!-- Node -->
-    <node name="detector_node" pkg="ros_mot" type="detector.py" output="screen" respawn="true" />
+    <!-- Detector Node -->
+    <node name="detector_node" pkg="ros_mot" type="detector.py" output="screen" respawn="true" >
+        <param name='visualization' value='$(arg visualization)' />
+    </node>
+
+    <!-- Visualization -->
+    <!-- <node name="rviz" pkg="rviz" type="rviz" args="-d $(find ros_mot)/config/example.rviz" if="$(arg visualization)"/> -->
+
 
 </launch>

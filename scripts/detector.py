@@ -24,17 +24,18 @@ from mmdet3d.apis import init_model, inference_detector
 from mmdet3d.structures.points import BasePoints
 
 # Constants / parameters
-callback_map = {'PointCloud2': 'self.pc2_callback'}
-publisher_map = {'PointCloud2': 'self.bbarray_pub'}
+callback_map = {'PointCloud2': 'self.pc2_callback'} # message type -> callback
+# publisher_map = {'PointCloud2': 'self.bbarray_pub'} #
 
 # Base detector class
 class mmdetector3d():			  	
-	def __init__(self, name, model, topic, msg_type, pub):                      
+	def __init__(self, name, model, topic, msg_type, pub, viz):                      
 		print('Starting detector: ', name)
 		self.name = name
 		self.model = model
 		self.topic = topic
 		self.msg_type = msg_type
+		self.viz = viz
 
 		# Create subscriber
 		self.sub = rospy.Subscriber(self.topic, eval(self.msg_type), eval(callback_map[self.msg_type]))
@@ -77,8 +78,9 @@ if __name__ == '__main__':
 	# Get Torch device
 	device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-	# Get detector param dictionary
+	# Get parameters
 	detector_dict = rospy.get_param("detectors")
+	viz = rospy.get_param("~visualization")
 	
 	# Create detectors according to params
 	for name,value in detector_dict.items():
@@ -90,6 +92,6 @@ if __name__ == '__main__':
 			model = init_model(cfg_file, ckpt_file, device)
 
 			# Create detector object
-			mmdetector3d(name,model,value['topic'],value['msg_type'],detection3d_pub)
+			mmdetector3d(name,model,value['topic'],value['msg_type'],detection3d_pub, viz)
 
 	rospy.spin()
