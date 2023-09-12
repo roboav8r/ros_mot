@@ -22,6 +22,7 @@ from sensor_msgs import point_cloud2
 
 from mmdet3d.apis import init_model, inference_detector
 from mmdet3d.structures.points import BasePoints
+from mmdet3d.structures.det3d_data_sample import Det3DDataSample
 
 # Constants / parameters
 callback_map = {'PointCloud2': 'self.pc2_callback'} # message type -> callback
@@ -29,36 +30,68 @@ callback_map = {'PointCloud2': 'self.pc2_callback'} # message type -> callback
 
 # Base detector class
 class mmdetector3d():			  	
-	def __init__(self, name, model, topic, msg_type, pub, viz):                      
+	def __init__(self, name, model, topic, msg_type, conf_thresh, labels, pub, viz):                      
 		print('Starting detector: ', name)
 		self.name = name
 		self.model = model
 		self.topic = topic
 		self.msg_type = msg_type
 		self.viz = viz
+		self.conf_thresh = conf_thresh
+		self.cat_labels = labels
 
 		# Create subscriber
 		self.sub = rospy.Subscriber(self.topic, eval(self.msg_type), eval(callback_map[self.msg_type]))
 
-		# Create publisher
+		# Create publishers
 		self.pub = pub
 
 		# Create empty messages
 		self.bb_array_msg = BoundingBoxArray()
 		self.bb_msg = BoundingBox()
 
+		# Initialize empty data structures
+		self.pc_list = []
+		self.pc_np = np.zeros((100000,4),dtype=np.float64)
+		self.pc_tensor = torch.from_numpy(self.pc_np).to(device)
+		self.result = Det3DDataSample()
+		self.lidar_msg = PointCloud2()
+
+	def format_pc2_msg(self):
+		print(self.result.pred_instances_3d.bboxes_3d)
+		print(self.result.pred_instances_3d.scores_3d)
+		print(self.result.pred_instances_3d.labels_3d)
+
+		self.bb_array_msg = BoundingBoxArray()
+		self.bb_array_msg.header = self.lidar_msg.header
+		
+		for ii in range(len(self.result.pred_instances_3d.scores_3d)):
+			if self.result.pred_instances_3d.scores_3d[ii] > self.conf_thresh:
+				self.bb_msg = BoundingBox()
+				self.bb_msg.header = self.lidar_msg.header
+				self.bb_msg.pose.position.x = self.result.pred_instances_3d.bboxes_3d.tensor[ii,0].float()
+				self.bb_msg.pose.position.y = self.result.pred_instances_3d.bboxes_3d.tensor[ii,1].float()
+				self.bb_msg.pose.position.z = self.result.pred_instances_3d.bboxes_3d.tensor[ii,2].float()
+				self.bb_msg.dimensions.x = self.result.pred_instances_3d.bboxes_3d.tensor[ii,3].float()
+				self.bb_msg.dimensions.y = self.result.pred_instances_3d.bboxes_3d.tensor[ii,4].float()
+				self.bb_msg.dimensions.z = self.result.pred_instances_3d.bboxes_3d.tensor[ii,5].float()
+				self.bb_msg.value = self.result.pred_instances_3d.scores_3d[ii]
+				self.bb_msg.label = self.result.pred_instances_3d.labels_3d[ii]
+
+				self.bb_array_msg.boxes.append(self.bb_msg)
+				# 		q = yaw_to_quaternion(trk[6])
+				# 		bbox.pose.orientation.w, bbox.pose.orientation.x, bbox.pose.orientation.y, bbox.pose.orientation.z = q[3], q[0], q[1], q[2]
+				
 	def pc2_callback(self, pc2_msg):
 		# Format ros pc2 message -> mmdet3d BasePoints
-		pc_list = point_cloud2.read_points_list(pc2_msg)
-		pc_np = np.array(list(pc_list))
-		result, _  = inference_detector(self.model, pc_np)
+		self.lidar_msg = pc2_msg
+		self.pc_list = point_cloud2.read_points_list(pc2_msg)
+		self.pc_np = np.array(list(self.pc_list))
+		self.result, _  = inference_detector(self.model, self.pc_np)
 
-		# Clear messages
-		self.bb_array_msg = BoundingBoxArray()
-		self.bb_msg = BoundingBox()
-
-		# Populate messages
-		# TODO 
+		print(self.bb_array_msg)
+		self.format_pc2_msg()
+		print(self.bb_array_msg)
 
 		# Publish messages
 		self.pub.publish(self.bb_array_msg)
@@ -92,6 +125,6 @@ if __name__ == '__main__':
 			model = init_model(cfg_file, ckpt_file, device)
 
 			# Create detector object
-			mmdetector3d(name,model,value['topic'],value['msg_type'],detection3d_pub, viz)
+			mmdetector3d(name,model,value['topic'],value['msg_type'], value['conf_thresh'], value['cat_labels'], detection3d_pub, viz)
 
 	rospy.spin()
