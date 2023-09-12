@@ -16,6 +16,8 @@ import torch
 import time
 import rospkg
 
+from tf import transformations as tf_trans
+
 from jsk_recognition_msgs.msg import BoundingBox, BoundingBoxArray
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs import point_cloud2
@@ -26,7 +28,6 @@ from mmdet3d.structures.det3d_data_sample import Det3DDataSample
 
 # Constants / parameters
 callback_map = {'PointCloud2': 'self.pc2_callback'} # message type -> callback
-# publisher_map = {'PointCloud2': 'self.bbarray_pub'} #
 
 # Base detector class
 class mmdetector3d():			  	
@@ -58,10 +59,6 @@ class mmdetector3d():
 		self.lidar_msg = PointCloud2()
 
 	def format_pc2_msg(self):
-		print(self.result.pred_instances_3d.bboxes_3d)
-		print(self.result.pred_instances_3d.scores_3d)
-		print(self.result.pred_instances_3d.labels_3d)
-
 		self.bb_array_msg = BoundingBoxArray()
 		self.bb_array_msg.header = self.lidar_msg.header
 		
@@ -69,19 +66,17 @@ class mmdetector3d():
 			if self.result.pred_instances_3d.scores_3d[ii] > self.conf_thresh:
 				self.bb_msg = BoundingBox()
 				self.bb_msg.header = self.lidar_msg.header
+				self.bb_msg.value = self.result.pred_instances_3d.scores_3d[ii]
+				self.bb_msg.label = self.result.pred_instances_3d.labels_3d[ii]
 				self.bb_msg.pose.position.x = self.result.pred_instances_3d.bboxes_3d.tensor[ii,0].float()
 				self.bb_msg.pose.position.y = self.result.pred_instances_3d.bboxes_3d.tensor[ii,1].float()
 				self.bb_msg.pose.position.z = self.result.pred_instances_3d.bboxes_3d.tensor[ii,2].float()
+				self.bb_msg.pose.orientation.x,self.bb_msg.pose.orientation.y,self.bb_msg.pose.orientation.z,self.bb_msg.pose.orientation.w   = tf_trans.quaternion_from_euler(0,0,self.result.pred_instances_3d.bboxes_3d.tensor[ii,6].float())
 				self.bb_msg.dimensions.x = self.result.pred_instances_3d.bboxes_3d.tensor[ii,3].float()
 				self.bb_msg.dimensions.y = self.result.pred_instances_3d.bboxes_3d.tensor[ii,4].float()
 				self.bb_msg.dimensions.z = self.result.pred_instances_3d.bboxes_3d.tensor[ii,5].float()
-				self.bb_msg.value = self.result.pred_instances_3d.scores_3d[ii]
-				self.bb_msg.label = self.result.pred_instances_3d.labels_3d[ii]
-
 				self.bb_array_msg.boxes.append(self.bb_msg)
-				# 		q = yaw_to_quaternion(trk[6])
-				# 		bbox.pose.orientation.w, bbox.pose.orientation.x, bbox.pose.orientation.y, bbox.pose.orientation.z = q[3], q[0], q[1], q[2]
-				
+
 	def pc2_callback(self, pc2_msg):
 		# Format ros pc2 message -> mmdet3d BasePoints
 		self.lidar_msg = pc2_msg
@@ -89,9 +84,7 @@ class mmdetector3d():
 		self.pc_np = np.array(list(self.pc_list))
 		self.result, _  = inference_detector(self.model, self.pc_np)
 
-		print(self.bb_array_msg)
 		self.format_pc2_msg()
-		print(self.bb_array_msg)
 
 		# Publish messages
 		self.pub.publish(self.bb_array_msg)
