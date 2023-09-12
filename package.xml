@@ -51,6 +51,9 @@
   <buildtool_depend>catkin</buildtool_depend>
   <exec_depend>python-pytorch-pip</exec_depend>
   <exec_depend>ros_numpy</exec_depend>
+  <exec_depend>jsk_recognition_msgs</exec_depend>
+  <exec_depend>jsk_rviz_plugins</exec_depend>
+  <exec_depend>rviz</exec_depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
