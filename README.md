@@ -47,8 +47,6 @@ mim download mmdet3d --config fcaf3d_2xb8_sunrgbd-3d-10class --dest models/
 For more 3D detector options, see the [mmdetection3d model zoo](https://github.com/open-mmlab/mmdetection3d/blob/1.0/docs/en/model_zoo.md).
 
 ## Trackers
-### AB3DMOT
-### SimpleTrack
 
 ## Example
 To run the example on the included `.bag` file:
@@ -65,3 +63,6 @@ This package includes everything you might need to get started, but here are som
 This repository is intended to develop, implement, and/or evaluate multiobject tracking capabilities on ROS robots and systems. While working on my PhD at UT Austin, I realized that there was a lack of accessible and easily usable ROS packages for MOT, which motivated me to create this.
 
 This effort began with Xinshuo Weng et al's [3D Multi-Object Tracking: A Baseline and New Evaluation Metrics (IROS 2020, ECCVW 2020)](https://github.com/xinshuoweng/AB3DMOT), which--as far as I can tell--was the first package in recent history designed for use *specifically* on real-time robotic systems. From there, a [ROS implementation](https://github.com/PardisTaghavi/real_time_tracking_AB3DMOT) was created. I am not affiliated with the authors of either package, but I used their work as a starting point for this repository. It is my goal to make their work fit within a more general and modular framework, and include additional MOT algorithms and techniques for other applications.
+
+# Future Work & Improvements
+- Check OAK-D bounding box computation

@@ -22,6 +22,9 @@
         <param name='visualization' value='$(arg visualization)' />
     </node>
 
+    <!-- Tracker Node -->
+    <node name="tracker_node" pkg="ros_mot" type="tracker.py" output="screen" respawn="true" />
+
     <!-- Visualization -->
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find ros_mot)/config/oakd.rviz" if="$(arg visualization)" />
 

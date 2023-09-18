@@ -4,6 +4,11 @@ sensors:
     msg_type: 'depthai_ros_msgs/SpatialDetectionArray'
     topic: '/yolov4_publisher/color/yolov4_Spatial_detections'
 
+tracker:
+  my_graph_tracker:
+    type: 'graph_tracker'
+    det_topic: '/detections_3d'
+
 detectors:
   oakd_sensor:
     type: 'oakd'
@@ -14,11 +19,7 @@ detectors:
     vfov: 55
     img_height: 416
     img_width: 416
-    cat_labels: ["person",
-            "bicycle",
-            "car",
-            "motorbike",
-            "aeroplane",
+    cat_labels: ["person", "bicycle", "car", "motorbike", "aeroplane",
             "bus",
             "train",
             "truck",
