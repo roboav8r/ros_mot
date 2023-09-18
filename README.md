@@ -49,6 +49,13 @@ For more 3D detector options, see the [mmdetection3d model zoo](https://github.c
 ## Trackers
 ### AB3DMOT
 ### SimpleTrack
+
+## Example
+To run the example on the included `.bag` file:
+```
+roslaunch ros_mot example.launch visualization:=true
+```
+
 # Miscellaneous
 This package includes everything you might need to get started, but here are some additional resources.
 ## Datasets
