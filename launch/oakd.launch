@@ -1,0 +1,28 @@
+
+<launch>
+
+    <!-- Arguments -->
+    <arg name='visualization' default ='false' />
+    <arg name='config_file' default='config/oakd.yaml'/>
+
+    <!-- Load configuration -->
+    <rosparam command="load" file="$(find ros_mot)/$(arg config_file)" />
+
+    <!-- Description -->
+    <node name="tf_base_oakd" pkg="tf" type="static_transform_publisher" args="0 0 1.5 0 0 0 world oak-d-base-frame 1"/>
+
+    <!-- Sensor/data Node -->
+    <include file="$(find depthai_examples)/launch/yolov4_publisher.launch" >
+        <arg name="depth_lower_threshold_mm"    value="100" />
+        <arg name="depth_upper_threshold_mm"    value="10000" />
+    </include>
+
+    <!-- Detector Node -->
+    <node name="detector_node" pkg="ros_mot" type="detector.py" output="screen" respawn="true" >
+        <param name='visualization' value='$(arg visualization)' />
+    </node>
+
+    <!-- Visualization -->
+    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find ros_mot)/config/oakd.rviz" if="$(arg visualization)" />
+
+</launch>
