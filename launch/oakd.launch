@@ -9,7 +9,7 @@
     <rosparam command="load" file="$(find ros_mot)/$(arg config_file)" />
 
     <!-- Description -->
-    <node name="tf_base_oakd" pkg="tf" type="static_transform_publisher" args="0 0 1.5 0 0 0 world oak-d-base-frame 1"/>
+    <node name="tf_base_oakd" pkg="tf" type="static_transform_publisher" args="0 0 1.5 0 0 0 base_link oak-d-base-frame 1"/>
 
     <!-- Sensor/data Node -->
     <include file="$(find depthai_examples)/launch/yolov4_publisher.launch" >

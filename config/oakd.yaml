@@ -8,6 +8,7 @@ tracker:
   my_graph_tracker:
     type: 'graph_tracker'
     det_topic: '/detections_3d'
+    frame: 'base_link'
 
 detectors:
   oakd_sensor:
