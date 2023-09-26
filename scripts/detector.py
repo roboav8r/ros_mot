@@ -6,7 +6,7 @@
 # Modified for ROS by: Pardis Taghavi
 # email: taghavi.pardis@gmail.com
 
-# Modified to actually work on ROS by John Duncan
+# Additional ROS modifications by John Duncan
 # email: john.a.duncan@utexas.edu
 
 from __future__ import print_function

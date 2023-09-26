@@ -20,6 +20,16 @@ import geometry_msgs
 from tf2_geometry_msgs import PoseStamped
 from jsk_recognition_msgs.msg import BoundingBox, BoundingBoxArray
 
+# Sensor object
+class SensorModel():
+    # TODO - (modularity/usability) accommodate multiple sensor types and models
+    def __init__(self):
+        self.obs_model = np.array([[1, 0, 0, 0, 0, 0],
+                     [0, 1, 0, 0, 0, 0],
+                     [0, 0, 1, 0, 0, 0]])
+        self.obs_noise = gtsam.noiseModel.Diagonal.Sigmas([.1,.1,.1])
+        
+
 # Detection object
 class Detection():
     def __init__(self, ts, px, py, pz, prob, label):
@@ -35,7 +45,10 @@ class Detection():
 # Track object
 class Track():
     def __init__(self, det):
+        # TODO - (cleanup) remove pos,vel and just use self.state
+        # TODO - convert det into tracker frame
         self.timestamp = det.timestamp
+        self.missed_det = 0
         self.pos = det.pos
         self.vel = np.array([[0.],[0.],[0.]])
         self.prob = det.prob
@@ -60,7 +73,7 @@ class Track():
         self.proc_model[2,5] = dt
 
     def compute_proc_noise(self,dt):
-        # TODO - verify noise model coefficients
+        # TODO (accuracy) - verify noise model coefficients
         self.proc_noise = gtsam.noiseModel.Diagonal.Sigmas([0.25*self.vel_variance**4*dt**4,
                                                             0.25*self.vel_variance**4*dt**4,
                                                             0.25*self.vel_variance**4*dt**4,
@@ -75,8 +88,16 @@ class Track():
         self.compute_proc_noise(dt)
         self.state = self.kf.predict(self.state,self.proc_model,np.zeros((6,6)),np.zeros((6,1)),self.proc_noise)
 
+    def update(self, det, sensor_mdl):
+        # TODO (cleanup) - remove pos,vel and just use self.state
+        self.state = self.kf.update(self.state, sensor_mdl.obs_model, det.pos, sensor_mdl.obs_noise)
+        self.timestamp = det.timestamp
+        self.pos = self.state.mean()[0:3]
+        self.vel = self.state.mean()[3:6]
+        self.missed_det = 0
+
 # Graph Tracker object
-class GraphTracker():
+class Tracker():
     def __init__(self, name, frame, pub):
         # Generic filter states
         self.name = name       
@@ -99,19 +120,20 @@ class GraphTracker():
         self.trk_pub = pub
 
         # Assignment
+        self.asgn_thresh = 4.
         self.cost_matrix = np.array()
+        self.det_asgn_idx = [] 
+        self.trk_asgn_idx = []
 
         # Initialize member variables
         self.graph = gtsam.NonlinearFactorGraph()
         self.trk_msg = BoundingBoxArray()
     
     def delete_tracks(self):
-        self.tracks = [track for track in self.tracks if track.prob < self.trk_delete_thresh]
-        self.tracks = [track for track in self.tracks if track.age > self.trk_delete_age]
+        self.tracks = [track for track in self.tracks if track.prob > self.trk_delete_thresh]
+        self.tracks = [track for track in self.tracks if track.age < self.trk_delete_age]
+        self.tracks = [track for track in self.tracks if ((rospy.Time.now() - track.timestamp) < self.trk_delete_time)]
 
-    def delete_track_candidates(self):
-        self.trk_candidates = [track for track in self.trk_candidates if ((rospy.Time.now() - track.timestamp).to_sec() < self.trk_delete_time)]
-   
     # Data association
     def cost(self, det, track):
         # Euclidean distance between positions
@@ -122,13 +144,35 @@ class GraphTracker():
         for ii,det in enumerate(self.detections):
             for jj,trk in enumerate(self.tracks):
                 self.cost_matrix[ii,jj] = self.cost(det,trk)
+    
+    def solve_cost_matrix(self):
+        self.det_asgn_idx, self.trk_asgn_idx = linear_sum_assignment(self.cost_matrix)
+        self.det_asgn_idx, self.trk_asgn_idx = list(self.det_asgn_idx), list(self.trk_asgn_idx)
+        
+        # If cost above threshold, remove the match
+        assert(len(self.det_asgn_idx) == len(self.trk_asgn_idx))
+        ii = len(self.det_asgn_idx)
+        while ii:
+            idx = ii-1
+            if self.cost_matrix[self.det_asgn_idx[idx],self.trk_asgn_idx[idx]] > self.asgn_thresh:
+                print(idx)
+                print('too high')
+                del self.det_asgn_idx[idx], self.trk_asgn_idx[idx]       
+            ii -=1
+        assert(len(self.det_asgn_idx) == len(self.trk_asgn_idx))
+
+    def format_trk_msg(self):
+        # TODO (required)         
+        # self.trk_msg.boxes = self.tracks
+        for trk in self.tracks:
+
 
     # Detection callback / main algorithm
-    def det_callback(self, det_array_msg):
+    def det_callback(self, det_array_msg, sensor_mdl):
         
         # Populate detections list from detections message
         for det in det_array_msg.boxes:
-            # self.pose_stamped = PoseStamped(det.header,det.pose)
+            # Convert to tracker frame and add to detections
             self.pose_stamped = self.tf_buf.transform(PoseStamped(det.header,det.pose), self.frame_id, rospy.Duration(1))
             self.detections.append(Detection(det.header.stamp, self.pose_stamped.pose.position.x, self.pose_stamped.pose.position.y, self.pose_stamped.pose.position.z, det.value, det.label))
 
@@ -136,27 +180,32 @@ class GraphTracker():
         for trk in self.tracks:
             trk.predict(det_array_msg.header.stamp)
         
-        # Compute detection-track correspondences
+        # Compute detection-track assignments
         self.compute_cost_matrix()
         self.solve_cost_matrix()
 
-        # TODO - Assign detections to track variables
-        # Add factors, variables
-        
-        # TODO - Update tracks
-        # for trk in self.tracks:
-        #     trk.predict(det_array_msg.header.stamp)
+        # Update matched tracks with matched detections
+        # TODO (improvement) - add factors/variables to graph as appropriate
+        for det_idx, trk_idx in zip(self.det_asgn_idx, self.trk_asgn_idx):
+            self.tracks[trk_idx].update(self.detections[det_idx], sensor_mdl)
 
-        # Save unmatched detections as potential track candidates
+        # Handle unmatched tracks
+        # TODO (improvement) - get subset of list 
+        for i, trk in enumerate(self.tracks):
+            if i not in self.trk_asgn_idx: # If track is unmatched
+                trk.missed_det +=1 # Increment missed detection counter
+
+        # Handle unmatched detections / initialize new tracks
         while self.detections:
-            self.trk_candidates.append(Track(self.detections.pop()))
-        
+            if (len(self.detections)-1) in self.det_asgn_idx: # If last detection is unmatched
+                self.tracks.append(Track(self.detections.pop())) # Create a new track
+            else: self.detections.pop() # Otherwise remove it
+
         # Delete tracks as needed
         self.delete_tracks()
-        self.delete_track_candidates()
 
-        # TODO - Convert tracks to track message
-        # self.trk_msg.boxes = self.tracks
+        # Convert tracks to track message
+        self.format_trk_msg()
 
         # Publish tracks
         self.trk_msg.header = det_array_msg.header
@@ -177,9 +226,11 @@ if __name__ == '__main__':
     for name,value in detector_dict.items():
         if value['type']=='graph_tracker':
             # Create tracker object
-            tracker = GraphTracker(name, value['frame'], track_pub)
+            tracker = Tracker(name, value['frame'], track_pub)
 
             # Create detector subscriber
-            det_sub = rospy.Subscriber(value['det_topic'], BoundingBoxArray, tracker.det_callback)
+            # TODO (usability) - read in from config file
+            oakd_model = SensorModel()
+            det_sub = rospy.Subscriber(value['det_topic'], BoundingBoxArray, tracker.det_callback, oakd_model)
 
     rospy.spin()
