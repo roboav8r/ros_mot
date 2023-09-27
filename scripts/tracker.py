@@ -19,7 +19,6 @@ class SensorModel():
                      [0, 0, 1, 0, 0, 0]])
         self.obs_noise = gtsam.noiseModel.Diagonal.Sigmas([.05,.05,.1]) # Used for recurring updates
         self.obs_cov = np.diag([.05,.05,.1, .1, .1, .1]) # Used for initial detection cov estimate
-        
 
 # Detection object
 class Detection():
