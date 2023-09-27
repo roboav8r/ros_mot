@@ -2,8 +2,9 @@
 <launch>
 
     <!-- Arguments -->
-    <arg name='visualization' default ='false' />
-    <arg name='config_file' default='config/oakd.yaml'/>
+    <arg name='visualization'   default ='false' />
+    <arg name='debug'           default='false' />
+    <arg name='config_file'     default='config/oakd.yaml'/>
 
     <!-- Load configuration -->
     <rosparam command="load" file="$(find ros_mot)/$(arg config_file)" />
@@ -23,7 +24,9 @@
     </node>
 
     <!-- Tracker Node -->
-    <node name="tracker_node" pkg="ros_mot" type="tracker.py" output="screen" respawn="true" />
+    <node name="tracker_node" pkg="ros_mot" type="tracker.py" output="screen" respawn="true" >
+        <param name='debug' value='$(arg debug)' />
+    </node>
 
     <!-- Visualization -->
     <node name="rviz" pkg="rviz" type="rviz" args="-d $(find ros_mot)/config/oakd.rviz" if="$(arg visualization)" />
