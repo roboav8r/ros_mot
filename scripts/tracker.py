@@ -1,21 +1,11 @@
 #!/usr/bin/env python3
 
-from __future__ import print_function
-
-import os
-import sys
-import time
-import math
-
-import torch
 import gtsam
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 import rospy
-import rospkg
 import tf2_ros
-import geometry_msgs
 
 from tf2_geometry_msgs import PoseStamped
 from jsk_recognition_msgs.msg import BoundingBox, BoundingBoxArray
@@ -35,44 +25,30 @@ class SensorModel():
 class Detection():
     def __init__(self, ts, px, py, pz, prob, label):
         self.timestamp = ts
-        # self.px, self.py, self.pz = px, py, pz
         self.pos = np.array([[px], [py], [pz]])
         self.prob = prob
         self.label = label
-        # Can be empty/null/contain partial info
-        # class conf % - float
-        # ??? BB dimensions
 
 # Track object
 class Track():
     def __init__(self, det, sensor_mdl):
-        # TODO - (cleanup) remove pos,vel and just use self.state
-        # TODO - convert det into tracker frame
         self.timestamp = det.timestamp
         self.last_updated = det.timestamp
         self.missed_det = 0
-        self.pos = det.pos
-        self.vel = np.array([[0.],[0.],[0.]])
         self.prob = det.prob
         self.label = det.label
         self.vel_variance = 0.5
 
         # Kalman filter for this object
         self.kf = gtsam.KalmanFilter(6)
-        self.state = self.kf.init(
-            np.vstack((self.pos, self.vel)),
-            sensor_mdl.obs_cov
-            # TODO - set this to detection covariance
-        )
+        self.state = self.kf.init(np.vstack((det.pos, np.array([[0.],[0.],[0.]]))), sensor_mdl.obs_cov)
 
         # Process model matrices
         self.proc_model = np.diag(np.ones(6))
         self.proc_noise = gtsam.noiseModel.Diagonal.Sigmas([1,1,1,1,1,1])
     
     def compute_proc_model(self,dt):
-        self.proc_model[0,3] = dt
-        self.proc_model[1,4] = dt
-        self.proc_model[2,5] = dt
+        self.proc_model[0,3], self.proc_model[1,4], self.proc_model[2,5]  = dt, dt, dt
 
     def compute_proc_noise(self,dt):
         # TODO (accuracy) - verify noise model coefficients
@@ -90,12 +66,9 @@ class Track():
         self.state = self.kf.predict(self.state,self.proc_model,np.zeros((6,6)),np.zeros((6,1)),self.proc_noise)
 
     def update(self, det, sensor_mdl):
-        # TODO (cleanup) - remove pos,vel and just use self.state
         self.state = self.kf.update(self.state, sensor_mdl.obs_model, det.pos, sensor_mdl.obs_noise)
         self.timestamp = det.timestamp
         self.last_updated = det.timestamp
-        self.pos = self.state.mean()[0:3]
-        self.vel = self.state.mean()[3:6]
         self.missed_det = 0
 
 # Graph Tracker object
@@ -140,9 +113,6 @@ class Tracker():
     # Data association
     def cost(self, det, track):
         # Euclidean distance between positions
-        print(det.pos[:,0])
-        print(track.state.mean()[0:3])
-        print()
         return np.linalg.norm(det.pos[:,0] - track.state.mean()[0:3])
 
     def compute_cost_matrix(self):
@@ -161,8 +131,6 @@ class Tracker():
         while ii:
             idx = ii-1
             if self.cost_matrix[self.det_asgn_idx[idx],self.trk_asgn_idx[idx]] > self.asgn_thresh:
-                print(idx)
-                print('too high')
                 del self.det_asgn_idx[idx], self.trk_asgn_idx[idx]       
             ii -=1
         assert(len(self.det_asgn_idx) == len(self.trk_asgn_idx))
