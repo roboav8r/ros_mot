@@ -121,12 +121,13 @@ class Tracker():
 
         # Assignment
         self.asgn_thresh = 4.
-        self.cost_matrix = np.array()
+        self.cost_matrix = np.empty(0)
         self.det_asgn_idx = [] 
         self.trk_asgn_idx = []
 
         # Initialize member variables
         self.graph = gtsam.NonlinearFactorGraph()
+        self.box_msg = BoundingBox()
         self.trk_msg = BoundingBoxArray()
     
     def delete_tracks(self):
@@ -161,10 +162,28 @@ class Tracker():
             ii -=1
         assert(len(self.det_asgn_idx) == len(self.trk_asgn_idx))
 
-    def format_trk_msg(self):
-        # TODO (required)         
-        # self.trk_msg.boxes = self.tracks
+    def format_trk_msg(self, det_array_msg):
+        self.trk_msg = BoundingBoxArray()
+        self.trk_msg.header.stamp = det_array_msg.header.stamp
+        self.trk_msg.header.frame_id = self.frame_id
+
+        print("PUBLISHING/OUTPUT")
+        print("Num. tracks:")
+        print(len(self.tracks) + "\n")
         for trk in self.tracks:
+            self.box_msg = BoundingBox()
+            self.box_msg.header = self.trk_msg.header
+            self.box_msg.pose.position.x = trk.state.mean()[0]
+            self.box_msg.pose.position.y = trk.state.mean()[1]
+            self.box_msg.pose.position.z = trk.state.mean()[2]
+            # TODO (visualization/accuracy) - update quaternion, bbox dimensions
+            self.box_msg.pose.orientation.z = 1
+            self.box_msg.dimensions.x = 0.25
+            self.box_msg.dimensions.y = 0.25
+            self.box_msg.dimensions.z = 1
+            self.box_msg.value = trk.prob
+            self.box_msg.label = trk.label
+            self.trk_msg.boxes.append(self.box_msg)
 
 
     # Detection callback / main algorithm
@@ -205,11 +224,10 @@ class Tracker():
         self.delete_tracks()
 
         # Convert tracks to track message
-        self.format_trk_msg()
+        self.format_trk_msg(det_array_msg)
 
         # Publish tracks
-        self.trk_msg.header = det_array_msg.header
-        self.trk_pub.publish()
+        self.trk_pub.publish(self.trk_msg)
 
 if __name__ == '__main__':
     # Initialize node
