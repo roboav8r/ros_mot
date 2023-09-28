@@ -137,13 +137,9 @@ class oakd_detector():
 				self.bb_msg.pose.position.y = -self.oakd_msg.detections[ii].position.y # Fix OAK-D's left hand coords
 				self.bb_msg.pose.position.z = self.oakd_msg.detections[ii].position.z
 				self.bb_msg.pose.orientation.x,self.bb_msg.pose.orientation.y,self.bb_msg.pose.orientation.z,self.bb_msg.pose.orientation.w = 0,0,0,1
-				# self.bb_msg.dimensions.x = 2*self.bb_msg.pose.position.z*self.hfov_atan*self.oakd_msg.detections[ii].bbox.size_x/self.width
-				# self.bb_msg.dimensions.y = 2*self.bb_msg.pose.position.z*self.vfov_atan*self.oakd_msg.detections[ii].bbox.size_y/self.height
-				# self.bb_msg.dimensions.z = 2*self.bb_msg.pose.position.z*self.hfov_atan*self.oakd_msg.detections[ii].bbox.size_x/self.width
-				self.bb_msg.dimensions.x = self.oakd_msg.detections[ii].bbox.size_x*self.width
-				self.bb_msg.dimensions.y = 2*self.bb_msg.pose.position.z*self.vfov_atan*self.oakd_msg.detections[ii].bbox.size_y/self.height
-				self.bb_msg.dimensions.z = 2*self.bb_msg.pose.position.z*self.hfov_atan*self.oakd_msg.detections[ii].bbox.size_x/self.width
-
+				self.bb_msg.dimensions.x = self.bb_msg.pose.position.z*self.hfov_atan*self.oakd_msg.detections[ii].bbox.size_x/self.width
+				self.bb_msg.dimensions.y = self.bb_msg.pose.position.z*self.vfov_atan*self.oakd_msg.detections[ii].bbox.size_y/self.height
+				self.bb_msg.dimensions.z = self.bb_msg.pose.position.z*self.hfov_atan*self.oakd_msg.detections[ii].bbox.size_x/self.width
 				self.bb_array_msg.boxes.append(self.bb_msg)
 
 	def oakd_callback(self, oakd_msg):

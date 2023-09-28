@@ -8,6 +8,7 @@ import rospy
 import tf2_ros
 
 from tf2_geometry_msgs import PoseStamped
+from visualization_msgs.msg import MarkerArray
 from jsk_recognition_msgs.msg import BoundingBox, BoundingBoxArray
 
 # Sensor object
@@ -22,11 +23,13 @@ class SensorModel():
 
 # Detection object
 class Detection():
-    def __init__(self, ts, px, py, pz, prob, label):
+    def __init__(self, ts, px, py, pz, bbx, bby, bbz, prob, label, transform):
         self.timestamp = ts
         self.pos = np.array([[px], [py], [pz]])
+        self.bbx, self.bby, self.bbz = bbx, bby, bbz
         self.prob = prob
         self.label = label
+        self.trk_transform = transform
 
 # Track object
 class Track():
@@ -37,6 +40,10 @@ class Track():
         self.prob = det.prob
         self.label = det.label
         self.vel_variance = 0.5
+
+        # Bounding box orientation and size
+        self.bbx, self.bby, self.bbz = det.bbx, det.bby, det.bbz
+        self.transform = det.trk_transform
 
         # Kalman filter for this object
         self.kf = gtsam.KalmanFilter(6)
@@ -69,10 +76,12 @@ class Track():
         self.timestamp = det.timestamp
         self.last_updated = det.timestamp
         self.missed_det = 0
+        self.bbx, self.bby, self.bbz = det.bbx, det.bby, det.bbz
+        self.transform = det.trk_transform
 
 # Graph Tracker object
 class Tracker():
-    def __init__(self, name, frame, pub):
+    def __init__(self, name, frame, trk_pub, viz_pub):
         # Generic filter states
         self.name = name       
         self.init = False
@@ -82,6 +91,7 @@ class Tracker():
         self.tf_buf = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buf)
         self.pose_stamped = PoseStamped()
+        self.sensor_transform = tf2_ros.TransformStamped()
 
         # Track and detection parameters & variables
         self.detections = []
@@ -95,14 +105,16 @@ class Tracker():
 
         # Track deletion
         self.trk_delete_thresh = 0.25
-        self.trk_delete_time = 1.5
-        self.trk_delete_missed_det = 10
+        self.trk_delete_time = 3.0
+        self.trk_delete_missed_det = 100
 
         # Initialize member variables
         self.graph = gtsam.NonlinearFactorGraph()
         self.box_msg = BoundingBox()
         self.trk_msg = BoundingBoxArray()
-        self.trk_pub = pub
+        self.viz_msg = MarkerArray()
+        self.trk_pub = trk_pub
+        self.viz_pub = viz_pub
     
     def delete_tracks(self):
         self.tracks = [track for track in self.tracks if track.prob > self.trk_delete_thresh]
@@ -146,11 +158,8 @@ class Tracker():
             self.box_msg.pose.position.x = trk.state.mean()[0]
             self.box_msg.pose.position.y = trk.state.mean()[1]
             self.box_msg.pose.position.z = trk.state.mean()[2]
-            # TODO (visualization/accuracy) - update quaternion, bbox dimensions
-            self.box_msg.pose.orientation.z = 1
-            self.box_msg.dimensions.x = 0.25
-            self.box_msg.dimensions.y = 0.25
-            self.box_msg.dimensions.z = 1
+            self.box_msg.pose.orientation = trk.transform.transform.rotation
+            self.box_msg.dimensions.x, self.box_msg.dimensions.y, self.box_msg.dimensions.z = trk.bbx, trk.bby, trk.bbz
             self.box_msg.value = trk.prob
             self.box_msg.label = trk.label
             self.trk_msg.boxes.append(self.box_msg)
@@ -164,7 +173,8 @@ class Tracker():
         for det in det_array_msg.boxes:
             # Convert to tracker frame and add to detections
             self.pose_stamped = self.tf_buf.transform(PoseStamped(det.header,det.pose), self.frame_id, rospy.Duration(1))
-            self.detections.append(Detection(det.header.stamp, self.pose_stamped.pose.position.x, self.pose_stamped.pose.position.y, self.pose_stamped.pose.position.z, det.value, det.label))
+            self.sensor_transform = self.tf_buf.lookup_transform(self.frame_id,det.header.frame_id, det.header.stamp, rospy.Duration(1))
+            self.detections.append(Detection(det.header.stamp, self.pose_stamped.pose.position.x, self.pose_stamped.pose.position.y, self.pose_stamped.pose.position.z, det.dimensions.x, det.dimensions.y, det.dimensions.z, det.value, det.label, self.sensor_transform))
         rospy.logdebug("DETECT: formatted %i detections \n", len(self.detections))
 
         # Propagate existing tracks
@@ -207,6 +217,7 @@ class Tracker():
 
         # Publish tracks
         self.trk_pub.publish(self.trk_msg)
+        self.viz_pub.publish(self.viz_msg)
 
 if __name__ == '__main__':
     # Initialize node
@@ -214,8 +225,9 @@ if __name__ == '__main__':
     rospy.init_node("tracker", log_level=rospy.DEBUG) if debug else rospy.init_node("tracker")
     print("Tracker node initialized")
 
-    # Create publisher
+    # Create publishers
     track_pub = rospy.Publisher("tracks_3d", BoundingBoxArray, queue_size=10)
+    viz_pub = rospy.Publisher("track_viz", MarkerArray, queue_size=10)
 
     # Get parameters
     detector_dict = rospy.get_param("tracker")
@@ -224,7 +236,7 @@ if __name__ == '__main__':
     for name,value in detector_dict.items():
         if value['type']=='graph_tracker':
             # Create tracker object
-            tracker = Tracker(name, value['frame'], track_pub)
+            tracker = Tracker(name, value['frame'], track_pub, viz_pub)
 
             # Create detector subscriber
             # TODO (usability) - read in from config file
