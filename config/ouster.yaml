@@ -5,11 +5,11 @@ sensors:
     topic: '/philbart/lidar_points'
 
 detectors:
-  kitti_pointpillars:
-    type: 'mmdet3d'
-    topic: '/philbart/lidar_points'  
+  coda_pcdet:
+    type: 'pcdet'
+    topic: '/philbart/lidar_points'
     msg_type: 'PointCloud2'
-    config: 'models/fcaf3d_2xb8_sunrgbd-3d-10class.py'
-    checkpoint: 'models/fcaf3d_8x2_sunrgbd-3d-10class_20220805_165017.pth'
-    conf_thresh: 0.5
-    cat_labels: ['Car', 'Pedestrian', 'Cyclist']
+    config: 'models/pvrcnn_oracle_allclass.yaml'
+    checkpoint: 'models/coda128_allclass_bestoracle.pth'
+    # conf_thresh: 0.5
+    # cat_labels: ['Car', 'Pedestrian', 'Cyclist']

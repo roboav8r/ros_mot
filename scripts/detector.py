@@ -9,6 +9,7 @@
 # Additional ROS modifications by John Duncan
 # email: john.a.duncan@utexas.edu
 
+# Imports 
 from __future__ import print_function
 import numpy as np, copy, math, sys, argparse
 
@@ -30,6 +31,12 @@ from sensor_msgs import point_cloud2
 from mmdet3d.apis import init_model, inference_detector
 from mmdet3d.structures.points import BasePoints
 from mmdet3d.structures.det3d_data_sample import Det3DDataSample
+
+from pcdet.config import cfg, cfg_from_yaml_file
+from pcdet.datasets import DatasetTemplate
+from pcdet.models import build_network, load_data_to_gpu
+from pcdet.utils import common_utils
+from pcdet.datasets.coda import coda_utils
 
 # Constants / parameters
 callback_map = {'PointCloud2': 'self.pc2_callback',
@@ -151,6 +158,63 @@ class oakd_detector():
 		# Publish messages
 		self.pub.publish(self.bb_array_msg)
 
+class pcdet_detector:
+	def __init__(self, name, topic, msg_type, cfg_file, pub):
+		print('Starting detector: ', name)
+		self.name = name
+		self.topic = topic
+		self.msg_type = msg_type
+		self.cfg = cfg
+
+		# Create subscriber
+		self.sub = rospy.Subscriber(self.topic, eval(self.msg_type), eval(callback_map[self.msg_type]))
+
+		# Create publishers
+		self.pub = pub
+
+		# Create empty messages
+		self.bb_array_msg = BoundingBoxArray()
+		self.bb_msg = BoundingBox()
+
+		# Create dummy dataset
+
+		# Create detector model
+		cfg_from_yaml_file(cfg_file, self.cfg)
+		self.model = build_network(model_cfg=self.cfg.MODEL, num_class=len(self.cfg.CLASS_NAMES), dataset=dummy_dataset)
+		self.model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
+		self.model.cuda()
+		self.model.eval()
+
+	def format_pc2_msg(self):
+		self.bb_array_msg = BoundingBoxArray()
+		self.bb_array_msg.header = self.lidar_msg.header
+		
+		for ii in range(len(self.result.pred_instances_3d.scores_3d)):
+			if self.result.pred_instances_3d.scores_3d[ii] > self.conf_thresh:
+				self.bb_msg = BoundingBox()
+				self.bb_msg.header = self.lidar_msg.header
+				self.bb_msg.value = self.result.pred_instances_3d.scores_3d[ii]
+				self.bb_msg.label = self.result.pred_instances_3d.labels_3d[ii]
+				self.bb_msg.pose.position.x = self.result.pred_instances_3d.bboxes_3d.tensor[ii,0].float()
+				self.bb_msg.pose.position.y = self.result.pred_instances_3d.bboxes_3d.tensor[ii,1].float()
+				self.bb_msg.pose.position.z = self.result.pred_instances_3d.bboxes_3d.tensor[ii,2].float()
+				self.bb_msg.pose.orientation.x,self.bb_msg.pose.orientation.y,self.bb_msg.pose.orientation.z,self.bb_msg.pose.orientation.w   = tf_trans.quaternion_from_euler(0,0,self.result.pred_instances_3d.bboxes_3d.tensor[ii,6].float())
+				self.bb_msg.dimensions.x = self.result.pred_instances_3d.bboxes_3d.tensor[ii,3].float()
+				self.bb_msg.dimensions.y = self.result.pred_instances_3d.bboxes_3d.tensor[ii,4].float()
+				self.bb_msg.dimensions.z = self.result.pred_instances_3d.bboxes_3d.tensor[ii,5].float()
+				self.bb_array_msg.boxes.append(self.bb_msg)
+
+	def pc2_callback(self, pc2_msg):
+		# Format ros pc2 message
+		self.lidar_msg = pc2_msg
+		self.pc_list = point_cloud2.read_points_list(pc2_msg)
+		self.pc_np = np.array(list(self.pc_list))
+		self.result, _  = inference_detector(self.model, self.pc_np)
+
+		self.format_pc2_msg()
+
+		# Publish messages
+		self.pub.publish(self.bb_array_msg)
 
 if __name__ == '__main__':
 
@@ -186,5 +250,10 @@ if __name__ == '__main__':
 		if value['type']=='oakd':
 			# Create OAK-D detector object - hfov, vfov, img_height, img_width,
 			oakd_detector(name,value['topic'], value['conf_thresh'],value['cat_labels'], value['hfov'], value['vfov'], value['img_height'], value['img_width'], detection3d_pub, viz)
+
+		if value['type']=='pcdet':
+			cfg_file = os.path.join(pkg_path,value['config'])
+			ckpt_file = os.path.join(pkg_path,value['checkpoint'])
+			pcdet_detector(name, value['topic'],value['msg_type'], cfg_file, detection3d_pub)
 
 	rospy.spin()
