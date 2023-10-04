@@ -32,7 +32,7 @@ catkin build ros_mot
 source devel/setup.bash
 rosdep install ros_mot
 cd src
-sudo python3 setup_ext.py develop
+sudo python3 setup_exts.py develop
 ```
 
 # Usage

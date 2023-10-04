@@ -58,9 +58,9 @@ class Track():
 
     def compute_proc_noise(self,dt):
         # TODO (accuracy) - verify noise model coefficients
-        self.proc_noise = gtsam.noiseModel.Diagonal.Sigmas([0.25*self.vel_variance**4*dt**4,
-                                                            0.25*self.vel_variance**4*dt**4,
-                                                            0.25*self.vel_variance**4*dt**4,
+        self.proc_noise = gtsam.noiseModel.Diagonal.Sigmas([0.25*self.vel_variance**2*dt**4,
+                                                            0.25*self.vel_variance**2*dt**4,
+                                                            0.25*self.vel_variance**2*dt**4,
                                                             0.5*self.vel_variance**2*dt**2,
                                                             0.5*self.vel_variance**2*dt**2,
                                                             0.5*self.vel_variance**2*dt**2])
