@@ -25,7 +25,7 @@ from tf import transformations as tf_trans
 
 from jsk_recognition_msgs.msg import BoundingBox, BoundingBoxArray
 from depthai_ros_msgs.msg import SpatialDetectionArray
-from tracking_msgs.msg import PosDetection, PosDetections
+from tracking_msgs.msg import DetectedObject, DetectedObjects
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs import point_cloud2
 
@@ -134,8 +134,8 @@ class oakd_detector():
 		# Create empty messages
 		# self.bb_array_msg = BoundingBoxArray()
 		# self.bb_msg = BoundingBox()
-		self.det_msg = PosDetection()
-		self.det_msgs = PosDetections()
+		self.det_msg = DetectedObject()
+		self.det_msgs = DetectedObjects()
 
 		# Initialize empty data structures
 		self.oakd_msg = SpatialDetectionArray()
@@ -143,7 +143,7 @@ class oakd_detector():
 	def format_oakd_msg(self):
 		# self.bb_array_msg = BoundingBoxArray()
 		# self.bb_array_msg.header = self.oakd_msg.header
-		self.det_msgs = PosDetections()
+		self.det_msgs = DetectedObjects()
 		self.det_msgs.header = self.oakd_msg.header
 		
 		for ii in range(len(self.oakd_msg.detections)):
@@ -160,7 +160,7 @@ class oakd_detector():
 				# self.bb_msg.dimensions.y = self.bb_msg.pose.position.z*self.vfov_atan*self.oakd_msg.detections[ii].bbox.size_y/self.height
 				# self.bb_msg.dimensions.z = self.bb_msg.pose.position.z*self.hfov_atan*self.oakd_msg.detections[ii].bbox.size_x/self.width
 				# self.bb_array_msg.boxes.append(self.bb_msg)
-				self.det_msg = PosDetection()
+				self.det_msg = DetectedObject()
 				self.det_msg.sensor_name = self.name
 				self.det_msg.detection_id = self.det_id_count
 				self.det_msg.class_id = self.oakd_msg.detections[ii].results[0].id
@@ -251,7 +251,7 @@ if __name__ == '__main__':
 
 	# Create common publishers
 	detection3d_pub = rospy.Publisher("detections_3d", BoundingBoxArray, queue_size=10)
-	detection_pos_pub = rospy.Publisher("detections_pos", PosDetections, queue_size=10)
+	detection_pos_pub = rospy.Publisher("detections_pos", DetectedObjects, queue_size=10)
 
 	# Get package path
 	pkg_path = rospkg.RosPack().get_path('ros_mot')
