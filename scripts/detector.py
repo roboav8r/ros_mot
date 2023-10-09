@@ -131,16 +131,16 @@ class oakd_detector():
 		# Create publishers
 		self.pub = pub
 
+		# Initialize empty data structures
+		self.oakd_msg = SpatialDetectionArray()
+
 		# Create empty messages
 		# self.bb_array_msg = BoundingBoxArray()
 		# self.bb_msg = BoundingBox()
 		self.det_msg = DetectedObject()
 		self.det_msgs = DetectedObjects()
 
-		# Initialize empty data structures
-		self.oakd_msg = SpatialDetectionArray()
-
-	def format_oakd_msg(self):
+	def format_det_msg(self):
 		# self.bb_array_msg = BoundingBoxArray()
 		# self.bb_array_msg.header = self.oakd_msg.header
 		self.det_msgs = DetectedObjects()
@@ -163,6 +163,7 @@ class oakd_detector():
 				# self.bb_array_msg.boxes.append(self.bb_msg)
 				self.det_msg = DetectedObject()
 				self.det_msg.detection_id = self.det_id_count
+				self.det_msg.detection_type = 'pos'
 				self.det_msg.class_id = self.oakd_msg.detections[ii].results[0].id
 				self.det_msg.class_confidence = self.oakd_msg.detections[ii].results[0].score
 				self.det_msg.pose.pose.position.x = self.oakd_msg.detections[ii].position.x
@@ -179,7 +180,7 @@ class oakd_detector():
 		# Format ros pc2 message -> mmdet3d BasePoints
 		self.oakd_msg = oakd_msg
 
-		self.format_oakd_msg()
+		self.format_det_msg()
 
 		# Publish messages
 		# self.pub.publish(self.bb_array_msg)
@@ -250,8 +251,8 @@ if __name__ == '__main__':
 	print("Detector node initialized")
 
 	# Create common publishers
-	detection3d_pub = rospy.Publisher("detections_3d", BoundingBoxArray, queue_size=10)
-	detection_pos_pub = rospy.Publisher("detections_pos", DetectedObjects, queue_size=10)
+	# detection3d_pub = rospy.Publisher("detections_3d", BoundingBoxArray, queue_size=10)
+	detection_pub = rospy.Publisher("detected_objects", DetectedObjects, queue_size=10)
 
 	# Get package path
 	pkg_path = rospkg.RosPack().get_path('ros_mot')
@@ -273,15 +274,15 @@ if __name__ == '__main__':
 			model = init_model(cfg_file, ckpt_file, device)
 
 			# Create detector object
-			mmdetector3d(name,model,value['topic'],value['msg_type'], value['conf_thresh'], value['cat_labels'], detection3d_pub, viz)
+			mmdetector3d(name,model,value['topic'],value['msg_type'], value['conf_thresh'], value['cat_labels'], detection_pub, viz)
 
 		if value['type']=='oakd':
 			# Create OAK-D detector object - hfov, vfov, img_height, img_width,
-			oakd_detector(name,value['topic'], value['conf_thresh'],value['cat_labels'], value['hfov'], value['vfov'], value['img_height'], value['img_width'], detection_pos_pub, viz)
+			oakd_detector(name,value['topic'], value['conf_thresh'],value['cat_labels'], value['hfov'], value['vfov'], value['img_height'], value['img_width'], detection_pub, viz)
 
 		if value['type']=='pcdet':
 			cfg_file = os.path.join(pkg_path,value['config'])
 			ckpt_file = os.path.join(pkg_path,value['checkpoint'])
-			pcdet_detector(name, value['topic'],value['msg_type'], cfg_file, detection3d_pub)
+			pcdet_detector(name, value['topic'],value['msg_type'], cfg_file, detection_pub)
 
 	rospy.spin()

@@ -7,7 +7,7 @@ sensors:
 tracker:
   my_graph_tracker:
     type: 'graph_tracker'
-    det_topic: '/detections_3d'
+    det_topic: '/detected_objects'
     frame: 'base_link'
 
 detectors:

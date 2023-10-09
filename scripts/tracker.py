@@ -10,6 +10,7 @@ import tf2_ros
 from tf2_geometry_msgs import PoseStamped
 from visualization_msgs.msg import MarkerArray
 from jsk_recognition_msgs.msg import BoundingBox, BoundingBoxArray
+from tracking_msgs.msg import DetectedObject, DetectedObjects, TrackedObject, TrackedObjects
 
 # Sensor object
 class SensorModel():
@@ -18,31 +19,37 @@ class SensorModel():
         self.obs_model = np.array([[1, 0, 0, 0, 0, 0],
                      [0, 1, 0, 0, 0, 0],
                      [0, 0, 1, 0, 0, 0]])
-        self.obs_noise = gtsam.noiseModel.Diagonal.Sigmas([.05,.05,.1]) # Used for recurring updates
+        self.obs_noise = gtsam.noiseModel.Diagonal.Sigmas([.05,.05,.1]) # Used for recurring updates # TODO - get from PoseWithCovariance message
         self.obs_cov = np.diag([.05,.05,.1, .1, .1, .1]) # Used for initial detection cov estimate
 
 # Detection object
 class Detection():
-    def __init__(self, ts, px, py, pz, bbx, bby, bbz, prob, label, transform):
+    def __init__(self, ts, px, py, pz, class_conf, class_id, transform, type="pos", bbx=0, bby=0, bbz=0):
         self.timestamp = ts
         self.pos = np.array([[px], [py], [pz]])
-        self.bbx, self.bby, self.bbz = bbx, bby, bbz
-        self.prob = prob
-        self.label = label
+        self.class_conf = class_conf
+        self.class_id = class_id
         self.trk_transform = transform
+        self.type = type # Position ('pos') or Bounding Box ('box')
+        self.bbx, self.bby, self.bbz = bbx, bby, bbz
 
 # Track object
 class Track():
+    # TODO (modularity) - move sensor_mdl to callback argument
     def __init__(self, det, sensor_mdl):
         self.timestamp = det.timestamp
         self.last_updated = det.timestamp
         self.missed_det = 0
-        self.prob = det.prob
-        self.label = det.label
+        self.class_conf = det.class_conf
+        self.class_id = det.class_id
         self.vel_variance = 0.5
 
         # Bounding box orientation and size
-        self.bbx, self.bby, self.bbz = det.bbx, det.bby, det.bbz
+        if det.type=='box':
+            self.bbx, self.bby, self.bbz = det.bbx, det.bby, det.bbz
+        # TODO - account for det.type=="pos" - give default value for class
+        if det.type=='pos':
+            self.bbx, self.bby, self.bbz = .25, .25, 2.0
         self.transform = det.trk_transform
 
         # Kalman filter for this object
@@ -57,7 +64,6 @@ class Track():
         self.proc_model[0,3], self.proc_model[1,4], self.proc_model[2,5]  = dt, dt, dt
 
     def compute_proc_noise(self,dt):
-        # TODO (accuracy) - verify noise model coefficients
         self.proc_noise = gtsam.noiseModel.Diagonal.Sigmas([0.25*self.vel_variance**2*dt**4,
                                                             0.25*self.vel_variance**2*dt**4,
                                                             0.25*self.vel_variance**2*dt**4,
@@ -76,12 +82,13 @@ class Track():
         self.timestamp = det.timestamp
         self.last_updated = det.timestamp
         self.missed_det = 0
+        # TODO (modularity) - only update bbx size if detection has type bbox
         self.bbx, self.bby, self.bbz = det.bbx, det.bby, det.bbz
         self.transform = det.trk_transform
 
 # Graph Tracker object
 class Tracker():
-    def __init__(self, name, frame, trk_pub, viz_pub):
+    def __init__(self, name, frame, trk_pub):
         # Generic filter states
         self.name = name       
         self.init = False
@@ -98,26 +105,28 @@ class Tracker():
         self.tracks = []
 
         # Assignment
-        self.asgn_thresh = 4.
+        self.asgn_thresh = 4. # TODO (modularity) - add this to tracker config file
         self.cost_matrix = np.empty(0)
         self.det_asgn_idx = [] 
         self.trk_asgn_idx = []
 
         # Track deletion
+        # TODO (modularity) - add this to tracker config file
         self.trk_delete_thresh = 0.25
         self.trk_delete_time = 3.0
         self.trk_delete_missed_det = 100
 
         # Initialize member variables
         self.graph = gtsam.NonlinearFactorGraph()
-        self.box_msg = BoundingBox()
-        self.trk_msg = BoundingBoxArray()
-        self.viz_msg = MarkerArray()
+        self.det_msg = DetectedObject()
+        # self.box_msg = BoundingBox()
+        # self.trk_msg = BoundingBoxArray()
+        self.trk_msg = TrackedObject()
+        self.trks_msg = TrackedObjects()
         self.trk_pub = trk_pub
-        self.viz_pub = viz_pub
     
     def delete_tracks(self):
-        self.tracks = [track for track in self.tracks if track.prob > self.trk_delete_thresh]
+        self.tracks = [track for track in self.tracks if track.class_conf > self.trk_delete_thresh]
         self.tracks = [track for track in self.tracks if track.missed_det < self.trk_delete_missed_det]
         self.tracks = [track for track in self.tracks if ((rospy.Time.now() - track.timestamp).to_sec() < self.trk_delete_time)]
 
@@ -147,34 +156,34 @@ class Tracker():
         assert(len(self.det_asgn_idx) == len(self.trk_asgn_idx))
 
     def format_trk_msg(self, det_array_msg):
-        self.trk_msg = BoundingBoxArray()
-        self.trk_msg.header.stamp = det_array_msg.header.stamp
-        self.trk_msg.header.frame_id = self.frame_id
+        self.trks_msg = TrackedObjects()
+        self.trks_msg.header.stamp = det_array_msg.header.stamp
+        self.trks_msg.header.frame_id = self.frame_id
 
         rospy.logdebug("OUTPUT: publishing %i tracks\n\n", len(self.tracks))
         for trk in self.tracks:
-            self.box_msg = BoundingBox()
-            self.box_msg.header = self.trk_msg.header
-            self.box_msg.pose.position.x = trk.state.mean()[0]
-            self.box_msg.pose.position.y = trk.state.mean()[1]
-            self.box_msg.pose.position.z = trk.state.mean()[2]
-            self.box_msg.pose.orientation = trk.transform.transform.rotation
-            self.box_msg.dimensions.x, self.box_msg.dimensions.y, self.box_msg.dimensions.z = trk.bbx, trk.bby, trk.bbz
-            self.box_msg.value = trk.prob
-            self.box_msg.label = trk.label
-            self.trk_msg.boxes.append(self.box_msg)
-
+            self.trk_msg = TrackedObject()
+            self.trk_msg.header = self.trk_msg.header
+            self.trk_msg.pose.pose.position.x = trk.state.mean()[0]
+            self.trk_msg.pose.pose.position.y = trk.state.mean()[1]
+            self.trk_msg.pose.pose.position.z = trk.state.mean()[2]
+            self.trk_msg.pose.pose.orientation = trk.transform.transform.rotation
+            self.trk_msg.class_confidence = trk.class_conf
+            self.trk_msg.class_id = trk.class_id
+            self.trk_msg.depth, self.trk_msg.width, self.trk_msg.height = trk.bbx, trk.bby, trk.bbz
+            self.trks_msg.tracks.append(self.trk_msg)
 
     # Detection callback / main algorithm
     def det_callback(self, det_array_msg, sensor_mdl):
         
         # Populate detections list from detections message
-        rospy.logdebug("DETECT: received %i detections", len(det_array_msg.boxes))
-        for det in det_array_msg.boxes:
+        rospy.logdebug("DETECT: received %i detections", len(det_array_msg.detections))
+        for det in det_array_msg.detections:
             # Convert to tracker frame and add to detections
-            self.pose_stamped = self.tf_buf.transform(PoseStamped(det.header,det.pose), self.frame_id, rospy.Duration(1))
-            self.sensor_transform = self.tf_buf.lookup_transform(self.frame_id,det.header.frame_id, det.header.stamp, rospy.Duration(1))
-            self.detections.append(Detection(det.header.stamp, self.pose_stamped.pose.position.x, self.pose_stamped.pose.position.y, self.pose_stamped.pose.position.z, det.dimensions.x, det.dimensions.y, det.dimensions.z, det.value, det.label, self.sensor_transform))
+            self.pose_stamped = self.tf_buf.transform(PoseStamped(det_array_msg.header,det.pose.pose), self.frame_id, rospy.Duration(1))
+            self.sensor_transform = self.tf_buf.lookup_transform(self.frame_id,det_array_msg.header.frame_id, det_array_msg.header.stamp, rospy.Duration(1))
+            self.detections.append(Detection(det_array_msg.header.stamp, self.pose_stamped.pose.position.x, self.pose_stamped.pose.position.y, self.pose_stamped.pose.position.z, det.class_confidence, det.class_id, self.sensor_transform, det.detection_type))
+            # TODO (functional) - convert covariance into tracker frame for each detection
         rospy.logdebug("DETECT: formatted %i detections \n", len(self.detections))
 
         # Propagate existing tracks
@@ -216,8 +225,7 @@ class Tracker():
         self.format_trk_msg(det_array_msg)
 
         # Publish tracks
-        self.trk_pub.publish(self.trk_msg)
-        self.viz_pub.publish(self.viz_msg)
+        self.trk_pub.publish(self.trks_msg)
 
 if __name__ == '__main__':
     # Initialize node
@@ -226,8 +234,9 @@ if __name__ == '__main__':
     print("Tracker node initialized")
 
     # Create publishers
-    track_pub = rospy.Publisher("tracks_3d", BoundingBoxArray, queue_size=10)
-    viz_pub = rospy.Publisher("track_viz", MarkerArray, queue_size=10)
+    # track_pub = rospy.Publisher("tracks_3d", BoundingBoxArray, queue_size=10)
+    track_pub = rospy.Publisher("tracked_objects", TrackedObjects, queue_size=10)
+    # viz_pub = rospy.Publisher("track_viz", MarkerArray, queue_size=10)
 
     # Get parameters
     detector_dict = rospy.get_param("tracker")
@@ -236,11 +245,12 @@ if __name__ == '__main__':
     for name,value in detector_dict.items():
         if value['type']=='graph_tracker':
             # Create tracker object
-            tracker = Tracker(name, value['frame'], track_pub, viz_pub)
+            tracker = Tracker(name, value['frame'], track_pub)
 
             # Create detector subscriber
             # TODO (usability) - read in from config file
             oakd_model = SensorModel()
-            det_sub = rospy.Subscriber(value['det_topic'], BoundingBoxArray, tracker.det_callback, oakd_model)
+            # det_sub = rospy.Subscriber(value['det_topic'], BoundingBoxArray, tracker.det_callback, oakd_model)
+            det_sub = rospy.Subscriber(value['det_topic'], DetectedObjects, tracker.det_callback, oakd_model)
 
     rospy.spin()
