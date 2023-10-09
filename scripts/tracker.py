@@ -24,32 +24,39 @@ class SensorModel():
 
 # Detection object
 class Detection():
-    def __init__(self, ts, px, py, pz, class_conf, class_id, transform, type="pos", bbx=0, bby=0, bbz=0):
+    def __init__(self, ts, px, py, pz, class_conf, class_id, det_id, class_str, transform, type="pos", bbx=0, bby=0, bbz=0):
         self.timestamp = ts
         self.pos = np.array([[px], [py], [pz]])
+        self.detection_id = det_id
         self.class_conf = class_conf
         self.class_id = class_id
+        self.class_string = class_str
         self.trk_transform = transform
         self.type = type # Position ('pos') or Bounding Box ('box')
-        self.bbx, self.bby, self.bbz = bbx, bby, bbz
+        self.obj_depth, self.obj_width, self.obj_height = bbx, bby, bbz
 
 # Track object
 class Track():
     # TODO (modularity) - move sensor_mdl to callback argument
-    def __init__(self, det, sensor_mdl):
+    def __init__(self, det, sensor_mdl, trk_id):
         self.timestamp = det.timestamp
+        self.time_created = det.timestamp
         self.last_updated = det.timestamp
         self.missed_det = 0
         self.class_conf = det.class_conf
         self.class_id = det.class_id
+        self.class_string = det.class_string
         self.vel_variance = 0.5
+        self.trk_id = trk_id
+        self.matched = True
+        self.detection_id = det.detection_id
 
         # Bounding box orientation and size
         if det.type=='box':
-            self.bbx, self.bby, self.bbz = det.bbx, det.bby, det.bbz
-        # TODO - account for det.type=="pos" - give default value for class
+            self.obj_depth, self.obj_width, self.obj_height = det.obj_depth, det.obj_width, det.obj_height
+        # TODO (modularity) - account for det.type=="pos" - give default value for class
         if det.type=='pos':
-            self.bbx, self.bby, self.bbz = .25, .25, 2.0
+            self.obj_depth, self.obj_width, self.obj_height = .25, .25, 2.0
         self.transform = det.trk_transform
 
         # Kalman filter for this object
@@ -76,19 +83,22 @@ class Track():
         self.compute_proc_model(dt)
         self.compute_proc_noise(dt)
         self.state = self.kf.predict(self.state,self.proc_model,np.zeros((6,6)),np.zeros((6,1)),self.proc_noise)
+        self.matched = False
 
     def update(self, det, sensor_mdl):
         self.state = self.kf.update(self.state, sensor_mdl.obs_model, det.pos, sensor_mdl.obs_noise)
         self.timestamp = det.timestamp
         self.last_updated = det.timestamp
         self.missed_det = 0
-        # TODO (modularity) - only update bbx size if detection has type bbox
-        self.bbx, self.bby, self.bbz = det.bbx, det.bby, det.bbz
+        self.detection_id = det.detection_id
+        self.matched = True
+        if det.type=='box': # Only update box size if it's a box detection
+            self.obj_depth, self.obj_width, self.obj_height = det.obj_depth, det.obj_width, det.obj_height
         self.transform = det.trk_transform
 
 # Graph Tracker object
 class Tracker():
-    def __init__(self, name, frame, trk_pub):
+    def __init__(self, name, frame, labels, trk_pub):
         # Generic filter states
         self.name = name       
         self.init = False
@@ -101,8 +111,12 @@ class Tracker():
         self.sensor_transform = tf2_ros.TransformStamped()
 
         # Track and detection parameters & variables
+        self.trk_id_count = 0
         self.detections = []
         self.tracks = []
+
+        # Class labels
+        self.cat_labels = labels
 
         # Assignment
         self.asgn_thresh = 4. # TODO (modularity) - add this to tracker config file
@@ -119,8 +133,6 @@ class Tracker():
         # Initialize member variables
         self.graph = gtsam.NonlinearFactorGraph()
         self.det_msg = DetectedObject()
-        # self.box_msg = BoundingBox()
-        # self.trk_msg = BoundingBoxArray()
         self.trk_msg = TrackedObject()
         self.trks_msg = TrackedObjects()
         self.trk_pub = trk_pub
@@ -167,10 +179,17 @@ class Tracker():
             self.trk_msg.pose.pose.position.x = trk.state.mean()[0]
             self.trk_msg.pose.pose.position.y = trk.state.mean()[1]
             self.trk_msg.pose.pose.position.z = trk.state.mean()[2]
+            self.trk_msg.twist.twist.linear.x = trk.state.mean()[3]
+            self.trk_msg.twist.twist.linear.y = trk.state.mean()[4]
+            self.trk_msg.twist.twist.linear.z = trk.state.mean()[5]
             self.trk_msg.pose.pose.orientation = trk.transform.transform.rotation
             self.trk_msg.class_confidence = trk.class_conf
             self.trk_msg.class_id = trk.class_id
-            self.trk_msg.depth, self.trk_msg.width, self.trk_msg.height = trk.bbx, trk.bby, trk.bbz
+            self.trk_msg.class_string = self.cat_labels[trk.class_id]
+            self.trk_msg.track_id = trk.trk_id
+            self.trk_msg.detection_id = trk.detection_id
+            self.trk_msg.matched = trk.matched
+            self.trk_msg.depth, self.trk_msg.width, self.trk_msg.height = trk.obj_depth, trk.obj_width, trk.obj_height
             self.trks_msg.tracks.append(self.trk_msg)
 
     # Detection callback / main algorithm
@@ -182,7 +201,7 @@ class Tracker():
             # Convert to tracker frame and add to detections
             self.pose_stamped = self.tf_buf.transform(PoseStamped(det_array_msg.header,det.pose.pose), self.frame_id, rospy.Duration(1))
             self.sensor_transform = self.tf_buf.lookup_transform(self.frame_id,det_array_msg.header.frame_id, det_array_msg.header.stamp, rospy.Duration(1))
-            self.detections.append(Detection(det_array_msg.header.stamp, self.pose_stamped.pose.position.x, self.pose_stamped.pose.position.y, self.pose_stamped.pose.position.z, det.class_confidence, det.class_id, self.sensor_transform, det.detection_type))
+            self.detections.append(Detection(det_array_msg.header.stamp, self.pose_stamped.pose.position.x, self.pose_stamped.pose.position.y, self.pose_stamped.pose.position.z, det.class_confidence, det.class_id, det.detection_id, det.class_string, self.sensor_transform, det.detection_type))
             # TODO (functional) - convert covariance into tracker frame for each detection
         rospy.logdebug("DETECT: formatted %i detections \n", len(self.detections))
 
@@ -216,7 +235,9 @@ class Tracker():
         while self.detections:
             if (len(self.detections)-1) in self.det_asgn_idx: # If detection at end of array is matched
                 self.detections.pop() # Remove it
-            else: self.tracks.append(Track(self.detections.pop(),sensor_mdl)) # Otherwise create a new track
+            else: 
+                self.tracks.append(Track(self.detections.pop(),sensor_mdl,self.trk_id_count)) # Otherwise create a new track
+                self.trk_id_count += 1
 
         # Delete tracks as needed
         self.delete_tracks()
@@ -245,7 +266,7 @@ if __name__ == '__main__':
     for name,value in detector_dict.items():
         if value['type']=='graph_tracker':
             # Create tracker object
-            tracker = Tracker(name, value['frame'], track_pub)
+            tracker = Tracker(name, value['frame'], value['cat_labels'], track_pub)
 
             # Create detector subscriber
             # TODO (usability) - read in from config file

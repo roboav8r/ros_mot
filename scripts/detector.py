@@ -149,23 +149,12 @@ class oakd_detector():
 		
 		for ii in range(len(self.oakd_msg.detections)):
 			if self.oakd_msg.detections[ii].results[0].score > self.conf_thresh:
-				# self.bb_msg = BoundingBox()
-				# self.bb_msg.header = self.oakd_msg.header
-				# self.bb_msg.value = self.oakd_msg.detections[ii].results[0].score
-				# self.bb_msg.label = self.oakd_msg.detections[ii].results[0].id
-				# self.bb_msg.pose.position.x = self.oakd_msg.detections[ii].position.x
-				# self.bb_msg.pose.position.y = -self.oakd_msg.detections[ii].position.y # Fix OAK-D's left hand coords
-				# self.bb_msg.pose.position.z = self.oakd_msg.detections[ii].position.z
-				# self.bb_msg.pose.orientation.x,self.bb_msg.pose.orientation.y,self.bb_msg.pose.orientation.z,self.bb_msg.pose.orientation.w = 0,0,0,1
-				# self.bb_msg.dimensions.x = self.bb_msg.pose.position.z*self.hfov_atan*self.oakd_msg.detections[ii].bbox.size_x/self.width
-				# self.bb_msg.dimensions.y = self.bb_msg.pose.position.z*self.vfov_atan*self.oakd_msg.detections[ii].bbox.size_y/self.height
-				# self.bb_msg.dimensions.z = self.bb_msg.pose.position.z*self.hfov_atan*self.oakd_msg.detections[ii].bbox.size_x/self.width
-				# self.bb_array_msg.boxes.append(self.bb_msg)
 				self.det_msg = DetectedObject()
 				self.det_msg.detection_id = self.det_id_count
 				self.det_msg.detection_type = 'pos'
 				self.det_msg.class_id = self.oakd_msg.detections[ii].results[0].id
 				self.det_msg.class_confidence = self.oakd_msg.detections[ii].results[0].score
+				self.det_msg.class_string = self.cat_labels[self.det_msg.class_id]
 				self.det_msg.pose.pose.position.x = self.oakd_msg.detections[ii].position.x
 				self.det_msg.pose.pose.position.y = -self.oakd_msg.detections[ii].position.y # Fix OAK-D's left hand coords
 				self.det_msg.pose.pose.position.z = self.oakd_msg.detections[ii].position.z
