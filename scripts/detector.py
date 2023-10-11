@@ -1,25 +1,10 @@
 #!/usr/bin/env python
 
-# Original Author of AB3DMOT repo: Xinshuo Weng
-# email: xinshuo.weng@gmail.com
-
-# Modified for ROS by: Pardis Taghavi
-# email: taghavi.pardis@gmail.com
-
-# Additional ROS modifications by John Duncan
-# email: john.a.duncan@utexas.edu
-
 # Imports 
-from __future__ import print_function
-import numpy as np, copy, math, sys, argparse
+import numpy as np
 
-import os
-import sys
 import rospy
-import torch
-import time
 import rospkg
-import math
 
 from tf import transformations as tf_trans
 
@@ -105,25 +90,25 @@ callback_map = {'PointCloud2': 'self.pc2_callback',
 
 # OAK-D detector class
 class oakd_detector():			  	
-	def __init__(self, name, topic, conf_thresh, labels, hfov, vfov, img_height, img_width, pub, viz):                      
+	def __init__(self, name, values, pub):                      
 		print('Starting detector: ', name)
 		self.name = name
-		self.topic = topic
+		self.topic = values['topic']
 		self.msg_type = 'SpatialDetectionArray'
-		self.viz = viz
-		self.conf_thresh = conf_thresh
-		self.cat_labels = labels
-		self.hfov_atan = math.atan(hfov*math.pi/180)
-		self.vfov_atan = math.atan(vfov*math.pi/180)
-		self.height = img_height
-		self.width = img_width
+		# self.conf_thresh = conf_thresh
+		self.cat_labels = values['labels']
+		# self.hfov_atan = math.atan(hfov*math.pi/180)
+		# self.vfov_atan = math.atan(vfov*math.pi/180)
+		# self.height = img_height
+		# self.width = img_width
 		self.det_id_count = 0
-		self.covariance = [0.1, 0., 0., 0., 0., 0.,
-					 	   0., 0.1, 0., 0., 0., 0.,
-						   0., 0., 0.25, 0., 0., 0.,
-						   0., 0., 0., 0., 0., 0.,
-						   0., 0., 0., 0., 0., 0.,
-						   0., 0., 0., 0., 0., 0.]
+		self.variance = np.array(values['sensor_variance'])
+		self.covariance = np.array([[self.variance[0]**2, 0., 0.],
+					 	   [0., self.variance[1]**2, 0.],
+						   [0., 0., self.variance[2]**2]])
+
+		print(self.variance)
+		print(self.covariance)
 
 		# Create subscriber
 		self.sub = rospy.Subscriber(self.topic, eval(self.msg_type), eval(callback_map[self.msg_type]))
@@ -135,14 +120,10 @@ class oakd_detector():
 		self.oakd_msg = SpatialDetectionArray()
 
 		# Create empty messages
-		# self.bb_array_msg = BoundingBoxArray()
-		# self.bb_msg = BoundingBox()
 		self.det_msg = DetectedObject()
 		self.det_msgs = DetectedObjects()
 
 	def format_det_msg(self):
-		# self.bb_array_msg = BoundingBoxArray()
-		# self.bb_array_msg.header = self.oakd_msg.header
 		self.det_msgs = DetectedObjects()
 		self.det_msgs.header = self.oakd_msg.header
 		self.det_msgs.sensor_name = self.name
@@ -165,14 +146,10 @@ class oakd_detector():
 				self.det_msgs.detections.append(self.det_msg)
 
 
-	def oakd_callback(self, oakd_msg):
-		# Format ros pc2 message -> mmdet3d BasePoints
-		self.oakd_msg = oakd_msg
-
+	def oakd_callback(self, msg):
+		# Receive ROS message, format, and publish as tracking_msgs/DetectedObjects message
+		self.oakd_msg = msg
 		self.format_det_msg()
-
-		# Publish messages
-		# self.pub.publish(self.bb_array_msg)
 		self.pub.publish(self.det_msgs)
 
 # class pcdet_detector:
@@ -236,42 +213,40 @@ class oakd_detector():
 if __name__ == '__main__':
 
 	# Initialize node
-	rospy.init_node("detector")
+	rospy.init_node("detector_node")
 	print("Detector node initialized")
 
 	# Create common publishers
-	# detection3d_pub = rospy.Publisher("detections_3d", BoundingBoxArray, queue_size=10)
 	detection_pub = rospy.Publisher("detected_objects", DetectedObjects, queue_size=10)
 
 	# Get package path
 	pkg_path = rospkg.RosPack().get_path('ros_mot')
 
 	# Get Torch device
-	device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+	# device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 	# Get parameters
 	detector_dict = rospy.get_param("detectors")
-	viz = rospy.get_param("~visualization")
 	
 	# Create detectors according to params
-	for name,value in detector_dict.items():
+	for detector_name, detector_params in detector_dict.items():
 
-		if value['type']=='mmdet3d':
-			# Create mmdet3d model
-			cfg_file = os.path.join(pkg_path,value['config'])
-			ckpt_file = os.path.join(pkg_path,value['checkpoint'])
-			model = init_model(cfg_file, ckpt_file, device)
+		if detector_params['type']=='oakd':
+			# Create OAK-D detector object
+			oakd_detector(detector_name, detector_params, detection_pub)
 
-			# Create detector object
-			mmdetector3d(name,model,value['topic'],value['msg_type'], value['conf_thresh'], value['cat_labels'], detection_pub, viz)
+		# if value['type']=='mmdet3d':
+		# 	# Create mmdet3d model
+		# 	cfg_file = os.path.join(pkg_path,value['config'])
+		# 	ckpt_file = os.path.join(pkg_path,value['checkpoint'])
+		# 	model = init_model(cfg_file, ckpt_file, device)
 
-		if value['type']=='oakd':
-			# Create OAK-D detector object - hfov, vfov, img_height, img_width,
-			oakd_detector(name,value['topic'], value['conf_thresh'],value['cat_labels'], value['hfov'], value['vfov'], value['img_height'], value['img_width'], detection_pub, viz)
+		# 	# Create detector object
+		# 	mmdetector3d(name,model,value['topic'],value['msg_type'], value['conf_thresh'], value['cat_labels'], detection_pub, viz)
 
-		if value['type']=='pcdet':
-			cfg_file = os.path.join(pkg_path,value['config'])
-			ckpt_file = os.path.join(pkg_path,value['checkpoint'])
-			pcdet_detector(name, value['topic'],value['msg_type'], cfg_file, detection_pub)
+		# if value['type']=='pcdet':
+		# 	cfg_file = os.path.join(pkg_path,value['config'])
+		# 	ckpt_file = os.path.join(pkg_path,value['checkpoint'])
+		# 	pcdet_detector(name, value['topic'],value['msg_type'], cfg_file, detection_pub)
 
 	rospy.spin()

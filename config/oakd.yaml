@@ -3,13 +3,18 @@
 #     type: 'oakd'
 #     msg_type: 'depthai_ros_msgs/SpatialDetectionArray'
 #     topic: '/yolov4_publisher/color/yolov4_Spatial_detections'
-
-tracker:
-  my_graph_tracker:
-    type: 'graph_tracker'
-    det_topic: '/detected_objects'
-    frame: 'base_link'
-    cat_labels: ["person", "bicycle", "car", "motorbike", "aeroplane",
+detectors:
+  desktop_oakd:
+    type: 'oakd'
+    topic: '/yolov4_publisher/color/yolov4_Spatial_detections'  
+    msg_type: 'SpatialDetectionArray'
+    conf_thresh: 0.
+    hfov: 69
+    vfov: 55
+    img_height: 416
+    img_width: 416
+    sensor_variance: [.015, .015, .025]
+    labels: ["person", "bicycle", "car", "motorbike", "aeroplane",
             "bus",
             "train",
             "truck",
@@ -87,22 +92,12 @@ tracker:
             "toothbrush"
         ]
 
-detectors:
-  oakd_sensor:
-    type: 'oakd'
-    topic: '/yolov4_publisher/color/yolov4_Spatial_detections'  
-    msg_type: 'SpatialDetectionArray'
-    conf_thresh: 0.
-    hfov: 69
-    vfov: 55
-    img_height: 416
-    img_width: 416
-    cat_labels: ["person", "bicycle", "car", "motorbike", "aeroplane",
-            "bus",
-            "train",
-            "truck",
-            "boat",
-            "traffic light",
+tracker:
+  my_graph_tracker:
+    type: 'graph_tracker'
+    det_topic: '/detected_objects'
+    frame: 'base_link'
+    labels: ["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "train", "truck", "boat", "traffic light",
             "fire hydrant",
             "stop sign",
             "parking meter",
