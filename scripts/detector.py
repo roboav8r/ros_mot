@@ -103,9 +103,8 @@ class oakd_detector():
 		# self.width = img_width
 		self.det_id_count = 0
 		self.variance = np.array(values['sensor_variance'])
-		self.covariance = np.array([[self.variance[0]**2, 0., 0.],
-					 	   [0., self.variance[1]**2, 0.],
-						   [0., 0., self.variance[2]**2]])
+		self.covariance = [self.variance[0]**2, 0., 0., 0., 0., 0., 0., self.variance[1]**2, 0., 0., 0., 0., 0., 0., self.variance[2]**2, 0., 0., 0.,
+						   0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
 
 		print(self.variance)
 		print(self.covariance)
@@ -129,21 +128,20 @@ class oakd_detector():
 		self.det_msgs.sensor_name = self.name
 		
 		for ii in range(len(self.oakd_msg.detections)):
-			if self.oakd_msg.detections[ii].results[0].score > self.conf_thresh:
-				self.det_msg = DetectedObject()
-				self.det_msg.detection_id = self.det_id_count
-				self.det_msg.detection_type = 'pos'
-				self.det_msg.class_id = self.oakd_msg.detections[ii].results[0].id
-				self.det_msg.class_confidence = self.oakd_msg.detections[ii].results[0].score
-				self.det_msg.class_string = self.cat_labels[self.det_msg.class_id]
-				self.det_msg.pose.pose.position.x = self.oakd_msg.detections[ii].position.x
-				self.det_msg.pose.pose.position.y = -self.oakd_msg.detections[ii].position.y # Fix OAK-D's left hand coords
-				self.det_msg.pose.pose.position.z = self.oakd_msg.detections[ii].position.z
-				self.det_msg.pose.pose.orientation.x,self.det_msg.pose.pose.orientation.y,self.det_msg.pose.pose.orientation.z,self.det_msg.pose.pose.orientation.w = 0,0,0,1
-				self.det_msg.pose.covariance = self.covariance
+			self.det_msg = DetectedObject()
+			self.det_msg.detection_id = self.det_id_count
+			self.det_msg.detection_type = 'pos'
+			self.det_msg.class_id = self.oakd_msg.detections[ii].results[0].id
+			self.det_msg.class_confidence = self.oakd_msg.detections[ii].results[0].score
+			self.det_msg.class_string = self.cat_labels[self.det_msg.class_id]
+			self.det_msg.pose.pose.position.x = self.oakd_msg.detections[ii].position.x
+			self.det_msg.pose.pose.position.y = -self.oakd_msg.detections[ii].position.y # Fix OAK-D's left hand coords
+			self.det_msg.pose.pose.position.z = self.oakd_msg.detections[ii].position.z
+			self.det_msg.pose.pose.orientation.x,self.det_msg.pose.pose.orientation.y,self.det_msg.pose.pose.orientation.z,self.det_msg.pose.pose.orientation.w = 0,0,0,1
+			self.det_msg.pose.covariance = self.covariance
 
-				self.det_id_count+=1
-				self.det_msgs.detections.append(self.det_msg)
+			self.det_id_count+=1
+			self.det_msgs.detections.append(self.det_msg)
 
 
 	def oakd_callback(self, msg):

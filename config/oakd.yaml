@@ -13,7 +13,8 @@ detectors:
     vfov: 55
     img_height: 416
     img_width: 416
-    sensor_variance: [.015, .015, .025]
+    # sensor_variance: [.015, .015, .025]
+    sensor_variance: [.15, .15, .25]
     labels: ["person", "bicycle", "car", "motorbike", "aeroplane",
             "bus",
             "train",
