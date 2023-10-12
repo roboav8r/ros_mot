@@ -5,6 +5,7 @@
 #     topic: '/yolov4_publisher/color/yolov4_Spatial_detections'
 detectors:
   desktop_oakd:
+    target_frame: 'base_link' # Frame to convert & publish the detections in. Should be the tracker frame if doing tracking, sensor frame if just doing detections.
     type: 'oakd'
     topic: '/yolov4_publisher/color/yolov4_Spatial_detections'  
     msg_type: 'SpatialDetectionArray'
@@ -94,7 +95,7 @@ detectors:
         ]
 
 tracker:
-  my_graph_tracker:
+    name: 'my_graph_tracker'
     type: 'graph_tracker'
     det_topic: '/detected_objects'
     frame: 'base_link'

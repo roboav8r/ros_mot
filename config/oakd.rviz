@@ -171,6 +171,7 @@ Visualization Manager:
       Name: DetectedObjects
       Queue Size: 10
       Render class IDs: true
+      Render class string: true
       Render confidences: true
       Render covariances:
         Line width: 0.10000000149011612
@@ -180,7 +181,7 @@ Visualization Manager:
       Style:
         Line width: 0.05000000074505806
         Scaling factor: 1
-        Value: Bounding boxes
+        Value: Simple
       Text spacing: 1
       Topic: /detected_objects
       Unreliable: false
@@ -215,6 +216,9 @@ Visualization Manager:
       Render history: true
       Render object visual: true
       Render track IDs: true
+      Render track class IDs: false
+      Render track class confidence: true
+      Render track class string: true
       Render track state: true
       Render velocities: true
       Show DELETED tracks: false
@@ -259,7 +263,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 9.399189949035645
+      Distance: 13.997490882873535
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -275,9 +279,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7903978228569031
+      Pitch: 0.5903981328010559
       Target Frame: <Fixed Frame>
-      Yaw: 2.878572702407837
+      Yaw: 2.458571434020996
     Saved: ~
 Window Geometry:
   Displays:

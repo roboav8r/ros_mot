@@ -5,6 +5,7 @@ import numpy as np
 
 import rospy
 import rospkg
+import tf2_ros
 
 from tf import transformations as tf_trans
 
@@ -13,6 +14,8 @@ from depthai_ros_msgs.msg import SpatialDetectionArray
 from tracking_msgs.msg import DetectedObject, DetectedObjects
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs import point_cloud2
+from tf2_geometry_msgs import PoseStamped
+from geometry_msgs.msg import Pose
 
 # from mmdet3d.apis import init_model, inference_detector
 # from mmdet3d.structures.points import BasePoints
@@ -27,6 +30,102 @@ from sensor_msgs import point_cloud2
 # Constants / parameters
 callback_map = {'PointCloud2': 'self.pc2_callback',
 				'SpatialDetectionArray': 'self.oakd_callback'} # message type -> callback
+
+# OAK-D detector class
+class oakd_detector():			  	
+	def __init__(self, name, params, pub):
+
+		print('Starting detector: ', name)
+		self.name = name
+		self.topic = params['topic']
+		self.msg_type = 'SpatialDetectionArray'
+		self.target_frame = params['target_frame']
+		# self.conf_thresh = conf_thresh
+		self.cat_labels = params['labels']
+		# self.hfov_atan = math.atan(hfov*math.pi/180)
+		# self.vfov_atan = math.atan(vfov*math.pi/180)
+		# self.height = img_height
+		# self.width = img_width
+		self.det_id_count = 0
+		self.variance_sensor = np.array([[params['sensor_variance'][0]],[params['sensor_variance'][1]],[params['sensor_variance'][2]]])
+		
+		# position and covariance in the original sensor frame + target (tracker) frame
+		self.pose_sensor = PoseStamped()
+		self.pose_target = PoseStamped()
+		self.covariance_sensor = np.matmul(self.variance_sensor,self.variance_sensor.T)
+		self.covariance_target = [0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.,
+						   0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
+
+		# Transformation from sensor -> target frame
+		self.tf_buf = tf2_ros.Buffer()
+		self.tf_listener = tf2_ros.TransformListener(self.tf_buf)
+		self.sensor_transform = tf2_ros.TransformStamped()
+	
+		# Create subscriber
+		self.sub = rospy.Subscriber(self.topic, eval(self.msg_type), eval(callback_map[self.msg_type]))
+
+		# Create publishers
+		self.pub = pub
+
+		# Initialize empty data structures
+		self.oakd_msg = SpatialDetectionArray()
+
+		# Create empty messages
+		self.det_msg = DetectedObject()
+		self.det_msgs = DetectedObjects()
+
+	def format_det_msg(self):
+		self.det_msgs = DetectedObjects()
+		self.det_msgs.header = self.oakd_msg.header
+		self.det_msgs.sensor_name = self.name
+
+		self.pose_sensor.header = self.oakd_msg.header
+
+		# Get transform from sensor to target/tracker frame
+		self.sensor_transform = self.tf_buf.lookup_transform(self.target_frame,self.det_msgs.header.frame_id, self.det_msgs.header.stamp, rospy.Duration(1))
+		self.rot_matrix = tf_trans.quaternion_matrix([self.sensor_transform.transform.rotation.x, 
+												self.sensor_transform.transform.rotation.y, 
+												self.sensor_transform.transform.rotation.z, 
+												self.sensor_transform.transform.rotation.w])[0:3,0:3]
+
+		for ii in range(len(self.oakd_msg.detections)):
+
+			# Transform position and covariance measurements from sensor to target frame
+			# TODO come back here
+			self.pose_sensor.pose.position.x = self.oakd_msg.detections[ii].pose.position.x
+			-self.oakd_msg.detections[ii].position.y
+			self.oakd_msg.detections[ii].position.z]
+			self.pose_sensor.pose.orientation.x,self.pose_sensor.pose.orientation.y,self.pose_sensor.pose.orientation.z,self.pose_sensor.pose.orientation.w = 0,0,0,1
+			
+			self.pose_target = self.tf_buf.transform(self.pose_sensor, self.target_frame, rospy.Duration(1))
+			self.covariance_target = np.matmul(self.variance_sensor,self.variance_sensor.T)
+
+			print("SENSOR & TARGET")
+			print(self.pose_sensor)
+			print(self.pose_target)
+			print()
+
+			self.det_msg = DetectedObject()
+			self.det_msg.detection_id = self.det_id_count
+			self.det_msg.detection_type = 'pos'
+			self.det_msg.class_id = self.oakd_msg.detections[ii].results[0].id
+			self.det_msg.class_confidence = self.oakd_msg.detections[ii].results[0].score
+			self.det_msg.class_string = self.cat_labels[self.det_msg.class_id]
+			self.det_msg.pose.pose.position.x = self.oakd_msg.detections[ii].position.x
+			self.det_msg.pose.pose.position.y = -self.oakd_msg.detections[ii].position.y # Fix OAK-D's left hand coords
+			self.det_msg.pose.pose.position.z = self.oakd_msg.detections[ii].position.z
+			# self.det_msg.pose.pose.orientation.x,self.det_msg.pose.pose.orientation.y,self.det_msg.pose.pose.orientation.z,self.det_msg.pose.pose.orientation.w = 
+			self.det_msg.pose.covariance = self.covariance
+
+			self.det_id_count+=1
+			self.det_msgs.detections.append(self.det_msg)
+
+
+	def oakd_callback(self, msg):
+		# Receive ROS message, format, and publish as tracking_msgs/DetectedObjects message
+		self.oakd_msg = msg
+		self.format_det_msg()
+		self.pub.publish(self.det_msgs)
 
 # # mmdetector3d class
 # class mmdetector3d():			  	
@@ -88,67 +187,6 @@ callback_map = {'PointCloud2': 'self.pc2_callback',
 # 		# Publish messages
 # 		self.pub.publish(self.bb_array_msg)
 
-# OAK-D detector class
-class oakd_detector():			  	
-	def __init__(self, name, values, pub):                      
-		print('Starting detector: ', name)
-		self.name = name
-		self.topic = values['topic']
-		self.msg_type = 'SpatialDetectionArray'
-		# self.conf_thresh = conf_thresh
-		self.cat_labels = values['labels']
-		# self.hfov_atan = math.atan(hfov*math.pi/180)
-		# self.vfov_atan = math.atan(vfov*math.pi/180)
-		# self.height = img_height
-		# self.width = img_width
-		self.det_id_count = 0
-		self.variance = np.array(values['sensor_variance'])
-		self.covariance = [self.variance[0]**2, 0., 0., 0., 0., 0., 0., self.variance[1]**2, 0., 0., 0., 0., 0., 0., self.variance[2]**2, 0., 0., 0.,
-						   0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
-
-		print(self.variance)
-		print(self.covariance)
-
-		# Create subscriber
-		self.sub = rospy.Subscriber(self.topic, eval(self.msg_type), eval(callback_map[self.msg_type]))
-
-		# Create publishers
-		self.pub = pub
-
-		# Initialize empty data structures
-		self.oakd_msg = SpatialDetectionArray()
-
-		# Create empty messages
-		self.det_msg = DetectedObject()
-		self.det_msgs = DetectedObjects()
-
-	def format_det_msg(self):
-		self.det_msgs = DetectedObjects()
-		self.det_msgs.header = self.oakd_msg.header
-		self.det_msgs.sensor_name = self.name
-		
-		for ii in range(len(self.oakd_msg.detections)):
-			self.det_msg = DetectedObject()
-			self.det_msg.detection_id = self.det_id_count
-			self.det_msg.detection_type = 'pos'
-			self.det_msg.class_id = self.oakd_msg.detections[ii].results[0].id
-			self.det_msg.class_confidence = self.oakd_msg.detections[ii].results[0].score
-			self.det_msg.class_string = self.cat_labels[self.det_msg.class_id]
-			self.det_msg.pose.pose.position.x = self.oakd_msg.detections[ii].position.x
-			self.det_msg.pose.pose.position.y = -self.oakd_msg.detections[ii].position.y # Fix OAK-D's left hand coords
-			self.det_msg.pose.pose.position.z = self.oakd_msg.detections[ii].position.z
-			self.det_msg.pose.pose.orientation.x,self.det_msg.pose.pose.orientation.y,self.det_msg.pose.pose.orientation.z,self.det_msg.pose.pose.orientation.w = 0,0,0,1
-			self.det_msg.pose.covariance = self.covariance
-
-			self.det_id_count+=1
-			self.det_msgs.detections.append(self.det_msg)
-
-
-	def oakd_callback(self, msg):
-		# Receive ROS message, format, and publish as tracking_msgs/DetectedObjects message
-		self.oakd_msg = msg
-		self.format_det_msg()
-		self.pub.publish(self.det_msgs)
 
 # class pcdet_detector:
 # 	def __init__(self, name, topic, msg_type, cfg_file, pub):
